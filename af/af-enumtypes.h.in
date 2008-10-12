@@ -1,0 +1,26 @@
+/*** BEGIN file-header ***/
+#ifndef __AF_ENUMTYPES_H__
+#define __AF_ENUMTYPES_H__
+
+#include <glib.h>
+#include <glib-object.h>
+
+G_BEGIN_DECLS
+
+/*** END file-header ***/
+
+/*** BEGIN file-production ***/
+/* enumerations from "@filename@" */
+/*** END file-production ***/
+
+/*** BEGIN file-tail ***/
+G_END_DECLS
+
+#endif /* !GIGGLE_ENUMERATIONS_H */
+/*** END file-tail ***/
+
+/*** BEGIN value-header ***/
+GType @enum_name@_get_type (void);
+#define AF_TYPE_@ENUMSHORT@ (@enum_name@_get_type())
+/*** END value-header ***/
+
