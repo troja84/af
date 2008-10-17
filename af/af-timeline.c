@@ -43,8 +43,9 @@ struct AfTimelinePriv
   AfTimelineProgressType progress_type;
   AfTimelineProgressFunc progress_func;
 
-  guint loop      : 1;
-  guint direction : 1;
+  guint animations_enabled : 1;
+  guint loop               : 1;
+  guint direction          : 1;
 };
 
 enum {
@@ -325,8 +326,7 @@ progress_type_to_func (AfTimelineProgressType type)
 }
 
 static gboolean
-af_timeline_run_frame (AfTimeline *timeline,
-                       gboolean    enable_animations)
+af_timeline_run_frame (AfTimeline *timeline)
 {
   AfTimelinePriv *priv;
   gdouble linear_progress, progress;
@@ -338,7 +338,7 @@ af_timeline_run_frame (AfTimeline *timeline,
   elapsed_time = (guint) (g_timer_elapsed (priv->timer, NULL) * 1000);
   linear_progress = (gdouble) elapsed_time / priv->duration;
 
-  if (enable_animations)
+  if (priv->animations_enabled)
     {
       if (priv->direction == AF_TIMELINE_DIRECTION_BACKWARD)
 	linear_progress = 1 - linear_progress;
@@ -380,12 +380,6 @@ af_timeline_run_frame (AfTimeline *timeline,
     }
 
   return TRUE;
-}
-
-static gboolean
-af_timeline_frame_idle_func (AfTimeline *timeline)
-{
-  return af_timeline_run_frame (timeline, TRUE);
 }
 
 /**
@@ -431,41 +425,33 @@ af_timeline_start (AfTimeline *timeline)
 
   priv = AF_TIMELINE_GET_PRIV (timeline);
 
-  if (priv->screen)
-    {
-      settings = gtk_settings_get_for_screen (priv->screen);
-      g_object_get (settings, "gtk-enable-animations", &enable_animations, NULL);
-    }
-
   if (priv->timer)
     g_timer_continue (priv->timer);
   else
     priv->timer = g_timer_new ();
 
-  if (enable_animations)
+  if (!priv->source_id)
     {
-      if (!priv->source_id)
-	{
-	  /* sanity check */
-	  g_assert (priv->fps > 0);
+      /* sanity check */
+      g_assert (priv->fps > 0);
 
-	  g_signal_emit (timeline, signals [STARTED], 0);
+      if (priv->screen)
+        {
+          settings = gtk_settings_get_for_screen (priv->screen);
+          g_object_get (settings, "gtk-enable-animations", &enable_animations, NULL);
+        }
 
-	  priv->source_id = gdk_threads_add_timeout (FRAME_INTERVAL (priv->fps),
-						     (GSourceFunc) af_timeline_frame_idle_func,
-						     timeline);
-	}
-    }
-  else
-    {
-      /* If animations are not enabled, only run the last frame,
-       * it take us instantaneously to the last state of the animation.
-       * The only potential flaw happens when people use the ::finished
-       * signal to trigger another animation, or even worse, finally
-       * loop into this animation again.
-       */
+      priv->animations_enabled = (enable_animations == TRUE);
+
       g_signal_emit (timeline, signals [STARTED], 0);
-      af_timeline_run_frame (timeline, FALSE);
+
+      if (enable_animations)
+        priv->source_id = gdk_threads_add_timeout (FRAME_INTERVAL (priv->fps),
+                                                   (GSourceFunc) af_timeline_run_frame,
+                                                   timeline);
+      else
+        priv->source_id = gdk_threads_add_idle ((GSourceFunc) af_timeline_run_frame,
+                                                timeline);
     }
 }
 
