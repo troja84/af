@@ -39,9 +39,43 @@ struct AfPropertyRange
 
 struct AfAnimator
 {
+  AfTimeline *timeline;
   GObject *object;
   GArray *properties;
 };
+
+static AfAnimator *
+af_animator_new (GObject *object,
+                 guint    duration)
+{
+  AfAnimator *animator;
+
+  animator = g_slice_new0 (AfAnimator);
+  animator->timeline = af_timeline_new (duration);
+  animator->object = g_object_ref (object);
+  animator->properties = g_array_new (FALSE, FALSE, sizeof (AfPropertyRange));
+
+  return animator;
+}
+
+static void
+af_animator_free (AfAnimator *animator)
+{
+  guint i;
+
+  g_object_unref (animator->timeline);
+  g_object_unref (animator->object);
+
+  for (i = 0; i < animator->properties->len; i++)
+    {
+      AfPropertyRange *property_range;
+
+      property_range = &g_array_index (animator->properties, AfPropertyRange, i);
+      g_param_spec_unref (property_range->pspec);
+    }
+
+  g_array_free (animator->properties, TRUE);
+}
 
 static void
 animator_frame_cb (AfTimeline *timeline,
@@ -198,7 +232,6 @@ af_animator_tween_property (gpointer     object,
                             GValue      *from,
                             GValue      *to)
 {
-  AfTimeline *timeline;
   AfAnimator *animator = NULL;
   static guint id_count = 0;
   guint id;
@@ -211,13 +244,11 @@ af_animator_tween_property (gpointer     object,
   if (G_UNLIKELY (!animators))
     animators = g_hash_table_new (g_direct_hash, g_direct_equal);
 
-  animator = g_slice_new0 (AfAnimator);
-  animator->object = g_object_ref (object);
-  animator->properties = g_array_new (FALSE, FALSE, sizeof (AfPropertyRange));
+  animator = af_animator_new (object, duration);
 
   if (!animator_add_tween_property (animator, property_name, from, to))
     {
-      /* FIXME: Free animator */
+      af_animator_free (animator);
       return 0;
     }
 
@@ -227,11 +258,10 @@ af_animator_tween_property (gpointer     object,
                        GUINT_TO_POINTER (id),
                        animator);
 
-  timeline = af_timeline_new (duration);
-  g_signal_connect (timeline, "frame",
+  g_signal_connect (animator->timeline, "frame",
                     G_CALLBACK (animator_frame_cb), animator);
 
-  af_timeline_start (timeline);
+  af_timeline_start (animator->timeline);
 
   return id;
 }
