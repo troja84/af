@@ -21,9 +21,9 @@ main (int argc, char *argv[])
 
         af_animator_tween (G_OBJECT (label),
                            1000,
-                           "xalign", 0., 1.,
-                           "yalign", 1., 0.,
-                           "angle", 0., 90.,
+                           "xalign", 1.,
+                           "yalign", 0.,
+                           "angle", 90.,
                            NULL);
 
         gtk_widget_show_all (window);

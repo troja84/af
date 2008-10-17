@@ -33,12 +33,10 @@ void  af_animator_register_type_transformation (GType                    type,
 guint af_animator_tween_property (gpointer     object,
                                   guint        duration,
                                   const gchar *property_name,
-                                  GValue      *from,
                                   GValue      *to);
 
 void  af_animator_add_tween_property (guint        id,
                                       const gchar *property_name,
-                                      GValue      *from,
                                       GValue      *to);
 
 

@@ -171,7 +171,6 @@ animator_frame_cb (AfTimeline *timeline,
 static gboolean
 animator_add_tween_property (AfAnimator  *animator,
                              const gchar *property_name,
-                             GValue      *from,
                              GValue      *to)
 {
   AfPropertyRange property_range = { 0, };
@@ -187,11 +186,9 @@ animator_add_tween_property (AfAnimator  *animator,
       return FALSE;
     }
 
-  if (G_VALUE_TYPE (from) != pspec->value_type ||
-      G_VALUE_TYPE (to) != pspec->value_type)
+  if (G_VALUE_TYPE (to) != pspec->value_type)
     {
-      g_warning ("Value types (%s, %s) do not match property type (%s)",
-                 G_VALUE_TYPE_NAME (from),
+      g_warning ("Target value type (%s) do not match property type (%s)",
                  G_VALUE_TYPE_NAME (to),
                  g_type_name (pspec->value_type));
       return FALSE;
@@ -200,7 +197,7 @@ animator_add_tween_property (AfAnimator  *animator,
   property_range.pspec = g_param_spec_ref (pspec);
 
   g_value_init (&property_range.from, pspec->value_type);
-  g_value_copy (from, &property_range.from);
+  g_object_get_property (animator->object, pspec->name, &property_range.from);
 
   g_value_init (&property_range.to, pspec->value_type);
   g_value_copy (to, &property_range.to);
@@ -229,7 +226,6 @@ guint
 af_animator_tween_property (gpointer     object,
                             guint        duration,
                             const gchar *property_name,
-                            GValue      *from,
                             GValue      *to)
 {
   AfAnimator *animator = NULL;
@@ -238,7 +234,6 @@ af_animator_tween_property (gpointer     object,
 
   g_return_val_if_fail (G_IS_OBJECT (object), 0);
   g_return_val_if_fail (property_name != NULL, 0);
-  g_return_val_if_fail (from != NULL, 0);
   g_return_val_if_fail (to != NULL, 0);
 
   if (G_UNLIKELY (!animators))
@@ -246,7 +241,7 @@ af_animator_tween_property (gpointer     object,
 
   animator = af_animator_new (object, duration);
 
-  if (!animator_add_tween_property (animator, property_name, from, to))
+  if (!animator_add_tween_property (animator, property_name, to))
     {
       af_animator_free (animator);
       return 0;
@@ -269,20 +264,18 @@ af_animator_tween_property (gpointer     object,
 void
 af_animator_add_tween_property (guint        id,
                                 const gchar *property_name,
-                                GValue      *from,
                                 GValue      *to)
 {
   AfAnimator *animator;
 
   g_return_if_fail (animators != NULL);
-  g_return_if_fail (from != NULL);
   g_return_if_fail (to != NULL);
 
   animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (id));
 
   g_return_if_fail (animator != NULL);
 
-  animator_add_tween_property (animator, property_name, from, to);
+  animator_add_tween_property (animator, property_name, to);
 }
 
 guint
@@ -301,7 +294,6 @@ af_animator_tween_valist (gpointer object,
   while (property_name)
     {
       GParamSpec *pspec;
-      GValue from = { 0, };
       GValue to = { 0, };
       gchar *error = NULL;
 
@@ -312,16 +304,6 @@ af_animator_tween_valist (gpointer object,
         {
           g_warning ("Property '%s' does not exist on object of class '%s'",
                      property_name, G_OBJECT_TYPE_NAME (object));
-          break;
-        }
-
-      g_value_init (&from, pspec->value_type);
-      G_VALUE_COLLECT (&from, args, 0, &error);
-
-      if (error)
-        {
-          g_warning (error);
-          g_free (error);
           break;
         }
 
@@ -338,13 +320,12 @@ af_animator_tween_valist (gpointer object,
       if (id == 0)
         id = af_animator_tween_property (object, duration,
                                          property_name,
-                                         &from, &to);
+                                         &to);
       else
         af_animator_add_tween_property (id,
                                         property_name,
-                                        &from, &to);
+                                        &to);
 
-      g_value_unset (&from);
       g_value_unset (&to);
 
       property_name = va_arg (args, const gchar *);

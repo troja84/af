@@ -41,7 +41,7 @@ main (int argc, char *argv[])
   gtk_container_add (GTK_CONTAINER (window), color_area);
 
   af_animator_tween (G_OBJECT (color_area), 500,
-                     "background-color", &from, &to,
+                     "background-color", &to,
                      NULL);
 
   gtk_widget_show_all (window);
