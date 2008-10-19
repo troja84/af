@@ -26,6 +26,7 @@
 
 static GHashTable *animators = NULL;
 static GHashTable *transformable_types = NULL;
+static guint id_count = 0;
 
 typedef struct AfPropertyRange AfPropertyRange;
 typedef struct AfAnimator AfAnimator;
@@ -41,11 +42,13 @@ struct AfAnimator
 {
   AfTimeline *timeline;
   GObject *object;
+  GObject *child;
   GArray *properties;
 };
 
 static AfAnimator *
 af_animator_new (GObject *object,
+                 GObject *child,
                  guint    duration)
 {
   AfAnimator *animator;
@@ -53,6 +56,7 @@ af_animator_new (GObject *object,
   animator = g_slice_new0 (AfAnimator);
   animator->timeline = af_timeline_new (duration);
   animator->object = g_object_ref (object);
+  animator->child = (child) ? g_object_ref (child) : NULL;
   animator->properties = g_array_new (FALSE, FALSE, sizeof (AfPropertyRange));
 
   return animator;
@@ -160,9 +164,17 @@ animator_frame_cb (AfTimeline *timeline,
         }
 
       if (handled)
-        g_object_set_property (animator->object,
-                               property_range->pspec->name,
-                               &value);
+        {
+          if (!animator->child)
+            g_object_set_property (animator->object,
+                                   property_range->pspec->name,
+                                   &value);
+          else
+            gtk_container_child_set_property (GTK_CONTAINER (animator->object),
+                                              GTK_WIDGET (animator->child),
+                                              property_range->pspec->name,
+                                              &value);
+        }
 
       g_value_unset (&value);
     }
@@ -176,8 +188,12 @@ animator_add_tween_property (AfAnimator  *animator,
   AfPropertyRange property_range = { 0, };
   GParamSpec *pspec;
 
-  pspec = g_object_class_find_property (G_OBJECT_GET_CLASS (animator->object),
-                                        property_name);
+  if (!animator->child)
+    pspec = g_object_class_find_property (G_OBJECT_GET_CLASS (animator->object),
+                                          property_name);
+  else
+    pspec = gtk_container_class_find_child_property (G_OBJECT_GET_CLASS (animator->object),
+                                                     property_name);
 
   if (G_UNLIKELY (!pspec))
     {
@@ -197,7 +213,13 @@ animator_add_tween_property (AfAnimator  *animator,
   property_range.pspec = g_param_spec_ref (pspec);
 
   g_value_init (&property_range.from, pspec->value_type);
-  g_object_get_property (animator->object, pspec->name, &property_range.from);
+
+  if (!animator->child)
+    g_object_get_property (animator->object, pspec->name, &property_range.from);
+  else
+    gtk_container_child_get_property (GTK_CONTAINER (animator->object),
+                                      GTK_WIDGET (animator->child),
+                                      pspec->name, &property_range.from);
 
   g_value_init (&property_range.to, pspec->value_type);
   g_value_copy (to, &property_range.to);
@@ -222,24 +244,20 @@ af_animator_register_type_transformation (GType                    type,
                          trans_func);
 }
 
-guint
-af_animator_tween_property (gpointer     object,
-                            guint        duration,
-                            const gchar *property_name,
-                            GValue      *to)
+static guint
+af_animator_tween_property_internal (gpointer     object,
+                                     gpointer     child,
+                                     guint        duration,
+                                     const gchar *property_name,
+                                     GValue      *to)
 {
   AfAnimator *animator = NULL;
-  static guint id_count = 0;
   guint id;
-
-  g_return_val_if_fail (G_IS_OBJECT (object), 0);
-  g_return_val_if_fail (property_name != NULL, 0);
-  g_return_val_if_fail (to != NULL, 0);
 
   if (G_UNLIKELY (!animators))
     animators = g_hash_table_new (g_direct_hash, g_direct_equal);
 
-  animator = af_animator_new (object, duration);
+  animator = af_animator_new (object, child, duration);
 
   if (!animator_add_tween_property (animator, property_name, to))
     {
@@ -261,6 +279,40 @@ af_animator_tween_property (gpointer     object,
   return id;
 }
 
+guint
+af_animator_tween_property (gpointer     object,
+                            guint        duration,
+                            const gchar *property_name,
+                            GValue      *to)
+{
+  g_return_val_if_fail (G_IS_OBJECT (object), 0);
+  g_return_val_if_fail (property_name != NULL, 0);
+  g_return_val_if_fail (to != NULL, 0);
+
+  return af_animator_tween_property_internal (object, NULL,
+                                              duration,
+                                              property_name,
+                                              to);
+}
+
+guint
+af_animator_tween_child_property (GtkContainer *container,
+                                  GtkWidget    *child,
+                                  guint         duration,
+                                  const gchar  *property_name,
+                                  GValue       *to)
+{
+  g_return_val_if_fail (GTK_IS_CONTAINER (container), 0);
+  g_return_val_if_fail (GTK_IS_WIDGET (child), 0);
+  g_return_val_if_fail (property_name != NULL, 0);
+  g_return_val_if_fail (to != NULL, 0);
+
+  return af_animator_tween_property_internal (container, child,
+                                              duration,
+                                              property_name,
+                                              to);
+}
+
 void
 af_animator_add_tween_property (guint        id,
                                 const gchar *property_name,
@@ -278,16 +330,14 @@ af_animator_add_tween_property (guint        id,
   animator_add_tween_property (animator, property_name, to);
 }
 
-guint
-af_animator_tween_valist (gpointer object,
-                          guint    duration,
-                          va_list  args)
+static guint
+af_animator_tween_valist_internal (gpointer object,
+                                   gpointer child,
+                                   guint    duration,
+                                   va_list  args)
 {
   const gchar *property_name;
   guint id = 0;
-
-  g_return_val_if_fail (G_IS_OBJECT (object), 0);
-  g_return_val_if_fail (args != NULL, 0);
 
   property_name = va_arg (args, const gchar *);
 
@@ -297,8 +347,12 @@ af_animator_tween_valist (gpointer object,
       GValue to = { 0, };
       gchar *error = NULL;
 
-      pspec = g_object_class_find_property (G_OBJECT_GET_CLASS (object),
-                                            property_name);
+      if (!child)
+        pspec = g_object_class_find_property (G_OBJECT_GET_CLASS (object),
+                                              property_name);
+      else
+        pspec = gtk_container_class_find_child_property (G_OBJECT_GET_CLASS (object),
+                                                         property_name);
 
       if (G_UNLIKELY (!pspec))
         {
@@ -318,9 +372,17 @@ af_animator_tween_valist (gpointer object,
         }
 
       if (id == 0)
-        id = af_animator_tween_property (object, duration,
-                                         property_name,
-                                         &to);
+        {
+          if (!child)
+            id = af_animator_tween_property (object, duration,
+                                             property_name,
+                                             &to);
+          else
+            id = af_animator_tween_child_property (object, child,
+                                                   duration,
+                                                   property_name,
+                                                   &to);
+        }
       else
         af_animator_add_tween_property (id,
                                         property_name,
@@ -335,6 +397,30 @@ af_animator_tween_valist (gpointer object,
 }
 
 guint
+af_animator_tween_valist (gpointer object,
+                          guint    duration,
+                          va_list  args)
+{
+  g_return_val_if_fail (G_IS_OBJECT (object), 0);
+  g_return_val_if_fail (args != NULL, 0);
+
+  return af_animator_tween_valist_internal (object, NULL, duration, args);
+}
+
+guint
+af_animator_child_tween_valist (GtkContainer *container,
+                                GtkWidget    *child,
+                                guint         duration,
+                                va_list       args)
+{
+  g_return_val_if_fail (GTK_IS_CONTAINER (container), 0);
+  g_return_val_if_fail (GTK_IS_WIDGET (child), 0);
+  g_return_val_if_fail (args != NULL, 0);
+
+  return af_animator_tween_valist_internal (container, child, duration, args);
+}
+
+guint
 af_animator_tween (gpointer object,
                    guint    duration,
                    ...)
@@ -346,6 +432,25 @@ af_animator_tween (gpointer object,
 
   va_start (args, duration);
   id = af_animator_tween_valist (object, duration, args);
+  va_end (args);
+
+  return id;
+}
+
+guint
+af_animator_child_tween (GtkContainer *container,
+                         GtkWidget    *child,
+                         guint         duration,
+                         ...)
+{
+  guint id;
+  va_list args;
+
+  g_return_val_if_fail (GTK_IS_CONTAINER (container), 0);
+  g_return_val_if_fail (GTK_IS_WIDGET (child), 0);
+
+  va_start (args, duration);
+  id = af_animator_child_tween_valist (container, child, duration, args);
   va_end (args);
 
   return id;

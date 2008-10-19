@@ -6,6 +6,7 @@ LDADDS = \
 	$(AF_LIBS)
 
 noinst_PROGRAMS = \
+	test-child-anim \
 	test-custom-transform \
 	test-simple-anim
 
@@ -20,3 +21,8 @@ test_custom_transform_SOURCES = \
 	test-custom-transform.c
 
 test_custom_transform_LDADD = $(LDADDS)
+
+test_child_anim_SOURCES = \
+	test-child-anim.c
+
+test_child_anim_LDADD = $(LDADDS)
