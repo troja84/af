@@ -27,6 +27,7 @@ main (int argc, char *argv[])
   GtkWidget *window, *color_area;
   GdkColor from = { 0, 65535, 0, 0 };
   GdkColor to = { 0, 0, 0, 65535 };
+  guint id;
 
   gtk_init (&argc, &argv);
 
@@ -40,9 +41,11 @@ main (int argc, char *argv[])
   af_color_area_set_background_color (AF_COLOR_AREA (color_area), &from);
   gtk_container_add (GTK_CONTAINER (window), color_area);
 
-  af_animator_tween (G_OBJECT (color_area), 500,
-                     "background-color", &to,
-                     NULL);
+  id = af_animator_tween (G_OBJECT (color_area),
+                          "background-color", &to,
+                          NULL);
+
+  af_animator_start (id, 500);
 
   gtk_widget_show_all (window);
 

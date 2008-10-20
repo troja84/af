@@ -5,8 +5,6 @@ int
 main (int argc, char *argv[])
 {
         GtkWidget *window, *label;
-        GValue v1 = { 0, };
-        GValue v2 = { 0, };
         guint id;
 
         gtk_init (&argc, &argv);
@@ -19,12 +17,13 @@ main (int argc, char *argv[])
         label = gtk_label_new ("Sliff Sloff");
         gtk_container_add (GTK_CONTAINER (window), label);
 
-        af_animator_tween (G_OBJECT (label),
-                           1000,
-                           "xalign", 1.,
-                           "yalign", 0.,
-                           "angle", 90.,
-                           NULL);
+        id = af_animator_tween (G_OBJECT (label),
+                                "xalign", 1.,
+                                "yalign", 0.,
+                                "angle", 90.,
+                                NULL);
+
+        af_animator_start (id, 1000);
 
         gtk_widget_show_all (window);
 
