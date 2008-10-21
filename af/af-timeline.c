@@ -425,13 +425,13 @@ af_timeline_start (AfTimeline *timeline)
 
   priv = AF_TIMELINE_GET_PRIV (timeline);
 
-  if (priv->timer)
-    g_timer_continue (priv->timer);
-  else
-    priv->timer = g_timer_new ();
-
   if (!priv->source_id)
     {
+      if (priv->timer)
+        g_timer_continue (priv->timer);
+      else
+        priv->timer = g_timer_new ();
+
       /* sanity check */
       g_assert (priv->fps > 0);
 

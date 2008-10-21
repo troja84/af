@@ -60,6 +60,11 @@ guint af_animator_child_tween          (GtkContainer *container,
 gboolean af_animator_start             (guint         id,
                                         guint         duration);
 
+void     af_animator_stop              (guint         id);
+void     af_animator_resume            (guint         id);
+void     af_animator_set_loop          (guint         id,
+                                        gboolean      loop);
+
 
 G_END_DECLS
 

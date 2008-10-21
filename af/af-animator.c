@@ -86,6 +86,7 @@ af_animator_free (AfAnimator *animator)
     }
 
   g_array_free (animator->properties, TRUE);
+  g_slice_free (AfAnimator, animator);
 }
 
 static void
@@ -185,6 +186,33 @@ animator_frame_cb (AfTimeline *timeline,
 
       g_value_unset (&value);
     }
+}
+
+static AfAnimatorController *
+af_animator_controller_new (AfAnimator *animator,
+                            guint       duration)
+{
+  AfAnimatorController *controller;
+
+  controller = g_slice_new (AfAnimatorController);
+  controller->timeline = af_timeline_new (duration);
+  controller->animator = animator;
+
+  g_signal_connect (controller->timeline, "frame",
+                    G_CALLBACK (animator_frame_cb), animator);
+
+  return controller;
+}
+
+static void
+af_animator_controller_free (AfAnimatorController *controller)
+{
+  g_object_unref (controller->timeline);
+
+  if (controller->animator)
+    af_animator_free (controller->animator);
+
+  g_slice_free (AfAnimatorController, controller);
 }
 
 static gboolean
@@ -457,15 +485,11 @@ af_animator_start (guint id,
 
   g_return_val_if_fail (animator != NULL, FALSE);
 
-  controller = g_slice_new (AfAnimatorController);
-  controller->timeline = af_timeline_new (duration);
-  controller->animator = animator;
-
-  g_signal_connect (controller->timeline, "frame",
-                    G_CALLBACK (animator_frame_cb), animator);
+  controller = af_animator_controller_new (animator, duration);
 
   if (G_UNLIKELY (!active_animators))
-    active_animators = g_hash_table_new (g_direct_hash, g_direct_equal);
+    active_animators = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL,
+                                              (GDestroyNotify) af_animator_controller_free);
 
   g_hash_table_insert (active_animators,
                        GUINT_TO_POINTER (id),
@@ -474,4 +498,55 @@ af_animator_start (guint id,
   af_timeline_start (controller->timeline);
 
   return TRUE;
+}
+
+void
+af_animator_stop (guint id)
+{
+  AfAnimatorController *controller;
+
+  g_return_if_fail (active_animators != NULL);
+
+  controller = g_hash_table_lookup (active_animators, GUINT_TO_POINTER (id));
+
+  g_return_if_fail (controller != NULL);
+
+  af_timeline_pause (controller->timeline);
+}
+
+void
+af_animator_resume (guint id)
+{
+  AfAnimatorController *controller;
+
+  g_return_if_fail (active_animators != NULL);
+
+  controller = g_hash_table_lookup (active_animators, GUINT_TO_POINTER (id));
+
+  g_return_if_fail (controller != NULL);
+
+  af_timeline_start (controller->timeline);
+}
+
+void
+af_animator_remove (guint id)
+{
+  g_return_if_fail (active_animators != NULL);
+
+  g_hash_table_remove (active_animators, GUINT_TO_POINTER (id));
+}
+
+void
+af_animator_set_loop (guint    id,
+                      gboolean loop)
+{
+  AfAnimatorController *controller;
+
+  g_return_if_fail (active_animators != NULL);
+
+  controller = g_hash_table_lookup (active_animators, GUINT_TO_POINTER (id));
+
+  g_return_if_fail (controller != NULL);
+
+  af_timeline_set_loop (controller->timeline, loop);
 }
