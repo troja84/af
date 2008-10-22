@@ -29,9 +29,19 @@ static GHashTable *active_animators = NULL;
 static GHashTable *transformable_types = NULL;
 static guint id_count = 0;
 
+typedef enum AfAnimatorType AfAnimatorType;
 typedef struct AfPropertyRange AfPropertyRange;
-typedef struct AfAnimator AfAnimator;
+typedef struct AfAnimatorSimple AfAnimatorSimple;
+typedef struct AfAnimatorParallel AfAnimatorParallel;
+typedef union AfAnimator AfAnimator;
 typedef struct AfAnimatorController AfAnimatorController;
+
+enum AfAnimatorType
+{
+  ANIMATOR_TYPE_SIMPLE,
+  ANIMATOR_TYPE_PARALLEL,
+  ANIMATOR_TYPE_SEQUENTIAL
+};
 
 struct AfPropertyRange
 {
@@ -40,11 +50,25 @@ struct AfPropertyRange
   GValue to;
 };
 
-struct AfAnimator
+struct AfAnimatorSimple
 {
+  AfAnimatorType type;
   GObject *object;
   GObject *child;
   GArray *properties;
+};
+
+struct AfAnimatorParallel
+{
+  AfAnimatorType type;
+  GArray *child_animators;
+};
+
+union AfAnimator
+{
+  AfAnimatorType type;
+  AfAnimatorSimple simple;
+  AfAnimatorSimple parallel;
 };
 
 struct AfAnimatorController
@@ -53,22 +77,27 @@ struct AfAnimatorController
   AfAnimator *animator;
 };
 
+static void    af_animator_free         (AfAnimator   *animator);
+static void    af_animator_set_progress (AfAnimator   *animator,
+                                         gdouble       progress);
+
+
 static AfAnimator *
-af_animator_new (GObject *object,
-                 GObject *child)
+af_animator_simple_new (GObject *object,
+                        GObject *child)
 {
   AfAnimator *animator;
 
   animator = g_slice_new0 (AfAnimator);
-  animator->object = g_object_ref (object);
-  animator->child = (child) ? g_object_ref (child) : NULL;
-  animator->properties = g_array_new (FALSE, FALSE, sizeof (AfPropertyRange));
+  animator->simple.object = g_object_ref (object);
+  animator->simple.child = (child) ? g_object_ref (child) : NULL;
+  animator->simple.properties = g_array_new (FALSE, FALSE, sizeof (AfPropertyRange));
 
   return animator;
 }
 
 static void
-af_animator_free (AfAnimator *animator)
+af_animator_simple_free (AfAnimatorSimple *animator)
 {
   guint i;
 
@@ -86,27 +115,26 @@ af_animator_free (AfAnimator *animator)
     }
 
   g_array_free (animator->properties, TRUE);
-  g_slice_free (AfAnimator, animator);
+  g_slice_free (AfAnimator, (AfAnimator *) animator);
 }
 
 static void
-animator_frame_cb (AfTimeline *timeline,
-                   gdouble     progress,
-                   gpointer    user_data)
+af_animator_simple_set_progress (AfAnimatorSimple *animator,
+                                 gdouble           progress)
 {
-  AfAnimator *animator;
   GValue value = { 0, };
+  GArray *properties;
   guint i;
 
-  animator = (AfAnimator *) user_data;
+  properties = animator->properties;
 
-  for (i = 0; i < animator->properties->len; i++)
+  for (i = 0; i < properties->len; i++)
     {
       AfPropertyRange *property_range;
       gboolean handled = FALSE;
       GType type;
 
-      property_range = &g_array_index (animator->properties, AfPropertyRange, i);
+      property_range = &g_array_index (properties, AfPropertyRange, i);
       g_value_init (&value, property_range->pspec->value_type);
       type = property_range->pspec->value_type;
 
@@ -188,6 +216,36 @@ animator_frame_cb (AfTimeline *timeline,
     }
 }
 
+static void
+af_animator_free (AfAnimator *animator)
+{
+  if (animator->type == ANIMATOR_TYPE_SIMPLE)
+    af_animator_simple_free ((AfAnimatorSimple *) animator);
+  else
+    g_critical ("Animator type not handled");
+}
+
+static void
+af_animator_set_progress (AfAnimator *animator,
+                          gdouble     progress)
+{
+  if (animator->type == ANIMATOR_TYPE_SIMPLE)
+    af_animator_simple_set_progress ((AfAnimatorSimple *) animator, progress);
+  else
+    g_critical ("Animator type not handled");
+}
+
+static void
+animator_frame_cb (AfTimeline *timeline,
+                   gdouble     progress,
+                   gpointer    user_data)
+{
+  AfAnimator *animator;
+
+  animator = (AfAnimator *) user_data;
+  af_animator_set_progress (animator, progress);
+}
+
 static AfAnimatorController *
 af_animator_controller_new (AfAnimator *animator,
                             guint       duration)
@@ -216,9 +274,9 @@ af_animator_controller_free (AfAnimatorController *controller)
 }
 
 static gboolean
-animator_add_tween_property (AfAnimator  *animator,
-                             const gchar *property_name,
-                             GValue      *to)
+animator_add_tween_property (AfAnimatorSimple *animator,
+                             const gchar      *property_name,
+                             GValue           *to)
 {
   AfPropertyRange property_range = { 0, };
   GParamSpec *pspec;
@@ -291,9 +349,10 @@ af_animator_tween_property_internal (gpointer     object,
   if (G_UNLIKELY (!animators))
     animators = g_hash_table_new (g_direct_hash, g_direct_equal);
 
-  animator = af_animator_new (object, child);
+  animator = af_animator_simple_new (object, child);
 
-  if (!animator_add_tween_property (animator, property_name, to))
+  if (!animator_add_tween_property ((AfAnimatorSimple *) animator,
+                                    property_name, to))
     {
       af_animator_free (animator);
       return 0;
@@ -349,9 +408,12 @@ af_animator_add_tween_property (guint        id,
 
   animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (id));
 
+  /* FIXME: Improve error handling here */
   g_return_if_fail (animator != NULL);
+  g_return_if_fail (animator->type == ANIMATOR_TYPE_SIMPLE);
 
-  animator_add_tween_property (animator, property_name, to);
+  animator_add_tween_property ((AfAnimatorSimple *) animator,
+                               property_name, to);
 }
 
 static guint
