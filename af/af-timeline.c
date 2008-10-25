@@ -40,8 +40,6 @@ struct AfTimelinePriv
   GTimer *timer;
 
   GdkScreen *screen;
-  AfTimelineProgressType progress_type;
-  AfTimelineProgressFunc progress_func;
 
   guint animations_enabled : 1;
   guint loop               : 1;
@@ -56,8 +54,7 @@ enum {
   PROP_DURATION,
   PROP_LOOP,
   PROP_DIRECTION,
-  PROP_SCREEN,
-  PROP_PROGRESS_TYPE,
+  PROP_SCREEN
 };
 
 enum {
@@ -126,14 +123,6 @@ af_timeline_class_init (AfTimelineClass *class)
 						      "Whether the timeline moves forward or backward in time",
 						      AF_TYPE_TIMELINE_DIRECTION,
 						      AF_TIMELINE_DIRECTION_FORWARD,
-						      G_PARAM_READWRITE));
-  g_object_class_install_property (object_class,
-				   PROP_DIRECTION,
-				   g_param_spec_enum ("progress-type",
-						      "Progress type",
-						      "Type of progress through the timeline",
-						      AF_TYPE_TIMELINE_PROGRESS_TYPE,
-						      AF_TIMELINE_PROGRESS_LINEAR,
 						      G_PARAM_READWRITE));
   g_object_class_install_property (object_class,
 				   PROP_SCREEN,
@@ -228,9 +217,6 @@ af_timeline_set_property (GObject      *object,
       af_timeline_set_screen (timeline,
                               GDK_SCREEN (g_value_get_object (value)));
       break;
-    case PROP_PROGRESS_TYPE:
-      af_timeline_set_progress_type (timeline, g_value_get_enum (value));
-      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -265,9 +251,6 @@ af_timeline_get_property (GObject    *object,
     case PROP_SCREEN:
       g_value_set_object (value, priv->screen);
       break;
-    case PROP_PROGRESS_TYPE:
-      g_value_set_enum (value, priv->progress_type);
-      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -292,87 +275,39 @@ af_timeline_finalize (GObject *object)
   G_OBJECT_CLASS (af_timeline_parent_class)->finalize (object);
 }
 
-/* Sinusoidal progress */
-static gdouble
-sinusoidal_progress (gdouble progress)
-{
-  return (sinf ((progress * G_PI) / 2));
-}
-
-static gdouble
-exponential_progress (gdouble progress)
-{
-  return progress * progress;
-}
-
-static gdouble
-ease_in_ease_out_progress (gdouble progress)
-{
-  progress *= 2;
-
-   if (progress < 1)
-     return pow (progress, 3) / 2;
-
-   return (pow (progress - 2, 3) + 2) / 2;
-}
-
-static AfTimelineProgressFunc
-progress_type_to_func (AfTimelineProgressType type)
-{
-  if (type == AF_TIMELINE_PROGRESS_SINUSOIDAL)
-    return sinusoidal_progress;
-  else if (type == AF_TIMELINE_PROGRESS_EXPONENTIAL)
-    return exponential_progress;
-  else if (type == AF_TIMELINE_PROGRESS_EASE_IN_EASE_OUT)
-    return ease_in_ease_out_progress;
-
-  return NULL;
-}
-
 static gboolean
 af_timeline_run_frame (AfTimeline *timeline)
 {
   AfTimelinePriv *priv;
-  gdouble linear_progress, delta_progress, progress;
+  gdouble delta_progress, progress;
   guint elapsed_time;
-  AfTimelineProgressFunc progress_func = NULL;
 
   priv = AF_TIMELINE_GET_PRIV (timeline);
 
   elapsed_time = (guint) (g_timer_elapsed (priv->timer, NULL) * 1000);
   g_timer_start (priv->timer);
-  linear_progress = priv->last_progress;
-  delta_progress = (gdouble) elapsed_time / priv->duration;
 
   if (priv->animations_enabled)
     {
+      delta_progress = (gdouble) elapsed_time / priv->duration;
+      progress = priv->last_progress;
+
       if (priv->direction == AF_TIMELINE_DIRECTION_BACKWARD)
-	linear_progress -= delta_progress;
+	progress -= delta_progress;
       else
-	linear_progress += delta_progress;
-      
-      priv->last_progress = linear_progress;
+	progress += delta_progress;
 
-      linear_progress = CLAMP (linear_progress, 0., 1.);
+      priv->last_progress = progress;
 
-      if (priv->progress_func)
-	progress_func = priv->progress_func;
-      else if (priv->progress_type)
-	progress_func = progress_type_to_func (priv->progress_type);
-
-      if (progress_func)
-	progress = (progress_func) (linear_progress);
-      else
-	progress = linear_progress;
+      progress = CLAMP (progress, 0., 1.);
     }
   else
     progress = (priv->direction == AF_TIMELINE_DIRECTION_FORWARD) ? 1.0 : 0.0;
 
-  g_signal_emit (timeline, signals [FRAME], 0,
-		 CLAMP (progress, 0.0, 1.0));
+  g_signal_emit (timeline, signals [FRAME], 0, progress);
 
-  if ((priv->direction == AF_TIMELINE_DIRECTION_FORWARD && linear_progress >= 1.0) ||
-      (priv->direction == AF_TIMELINE_DIRECTION_BACKWARD && linear_progress <= 0.0))
+  if ((priv->direction == AF_TIMELINE_DIRECTION_FORWARD && progress >= 1.0) ||
+      (priv->direction == AF_TIMELINE_DIRECTION_BACKWARD && progress <= 0.0))
     {
       if (!priv->loop)
 	{
@@ -728,57 +663,34 @@ af_timeline_set_screen (AfTimeline *timeline,
   g_object_notify (G_OBJECT (timeline), "screen");
 }
 
-void
-af_timeline_set_progress_type (AfTimeline             *timeline,
-                               AfTimelineProgressType  type)
+gdouble
+af_timeline_calculate_progress (gdouble                linear_progress,
+                                AfTimelineProgressType progress_type)
 {
-  AfTimelinePriv *priv;
+  gdouble progress;
 
-  g_return_if_fail (AF_IS_TIMELINE (timeline));
+  progress = linear_progress;
 
-  priv = AF_TIMELINE_GET_PRIV (timeline);
+  switch (progress_type)
+    {
+    case AF_TIMELINE_PROGRESS_LINEAR:
+      break;
+    case AF_TIMELINE_PROGRESS_SINUSOIDAL:
+      progress = sinf ((progress * G_PI) / 2);
+      break;
+    case AF_TIMELINE_PROGRESS_EXPONENTIAL:
+      progress *= progress;
+      break;
+    case AF_TIMELINE_PROGRESS_EASE_IN_EASE_OUT:
+      {
+        progress *= 2;
 
-  priv->progress_type = type;
+        if (progress < 1)
+          progress = pow (progress, 3) / 2;
+        else
+          progress = (pow (progress - 2, 3) + 2) / 2;
+      }
+    }
 
-  g_object_notify (G_OBJECT (timeline), "progress-type");
-}
-
-AfTimelineProgressType
-af_timeline_get_progress_type (AfTimeline *timeline)
-{
-  AfTimelinePriv *priv;
-
-  g_return_val_if_fail (AF_IS_TIMELINE (timeline), AF_TIMELINE_PROGRESS_LINEAR);
-
-  priv = AF_TIMELINE_GET_PRIV (timeline);
-
-  if (priv->progress_func)
-    return AF_TIMELINE_PROGRESS_LINEAR;
-
-  return priv->progress_type;
-}
-
-/**
- * af_timeline_set_progress_func:
- * @timeline: A #AfTimeline
- * @progress_func: progress function
- *
- * Sets the progress function. This function will be used to calculate
- * a different progress to pass to the ::frame signal based on the
- * linear progress through the timeline. Setting progress_func
- * to %NULL will make the timeline use the default function,
- * which is just a linear progress.
- *
- * All progresses are in the [0.0, 1.0] range.
- **/
-void
-af_timeline_set_progress_func (AfTimeline             *timeline,
-                               AfTimelineProgressFunc  progress_func)
-{
-  AfTimelinePriv *priv;
-
-  g_return_if_fail (AF_IS_TIMELINE (timeline));
-
-  priv = AF_TIMELINE_GET_PRIV (timeline);
-  priv->progress_func = progress_func;
+  return progress;
 }

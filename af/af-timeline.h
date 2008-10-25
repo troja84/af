@@ -59,8 +59,6 @@ struct AfTimelineClass
   void (* __gtk_reserved4) (void);
 };
 
-typedef gdouble (*AfTimelineProgressFunc) (gdouble progress);
-
 
 GType                 af_timeline_get_type           (void) G_GNUC_CONST;
 
@@ -92,15 +90,11 @@ void                  af_timeline_set_screen         (AfTimeline              *t
 
 AfTimelineDirection   af_timeline_get_direction      (AfTimeline              *timeline);
 void                  af_timeline_set_direction      (AfTimeline              *timeline,
-                                                      AfTimelineDirection     direction);
+                                                      AfTimelineDirection      direction);
 
-void                  af_timeline_set_progress_type  (AfTimeline              *timeline,
-                                                      AfTimelineProgressType  type);
-void                  af_timeline_get_progress_func  (AfTimeline             *timeline);
-
-void                  af_timeline_set_progress_func  (AfTimeline             *timeline,
-                                                      AfTimelineProgressFunc  progress_func);
+gdouble               af_timeline_calculate_progress (gdouble                  linear_progress,
+                                                      AfTimelineProgressType   progress_type);
 
 G_END_DECLS
 
-#endif /* __GTK_TIMELINE_H__ */
+#endif /* __AF_TIMELINE_H__ */
