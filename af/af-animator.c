@@ -53,6 +53,7 @@ struct AfAnimator
 {
   AfTimeline *timeline;
   GPtrArray *transitions;
+  GPtrArray *finished_transitions;
 };
 
 static AfTransition *
@@ -104,6 +105,7 @@ af_animator_new (void)
 
   animator = g_slice_new0 (AfAnimator);
   animator->transitions = g_ptr_array_new ();
+  animator->finished_transitions = g_ptr_array_new ();
 
   return animator;
 }
@@ -111,23 +113,23 @@ af_animator_new (void)
 static void
 af_animator_free (AfAnimator *animator)
 {
-  guint i;
-
   if (animator->timeline)
     {
       af_timeline_pause (animator->timeline);
       g_object_unref (animator->timeline);
     }
 
-  for (i = 0; i < animator->transitions->len; i++)
-    {
-      AfTransition *transition;
-
-      transition = g_ptr_array_index (animator->transitions, i);
-      af_transition_free (transition);
-    }
-
+  g_ptr_array_foreach (animator->transitions,
+                       (GFunc) af_transition_free,
+                       NULL);
   g_ptr_array_free (animator->transitions, TRUE);
+
+
+  g_ptr_array_foreach (animator->finished_transitions,
+                       (GFunc) af_transition_free,
+                       NULL);
+  g_ptr_array_free (animator->finished_transitions, TRUE);
+
   g_slice_free (AfAnimator, animator);
 }
 
@@ -235,27 +237,46 @@ animator_frame_cb (AfTimeline *timeline,
                    gpointer    user_data)
 {
   AfAnimator *animator;
-  guint i;
+  AfTransition *transition;
+  guint i = 0;
 
   animator = (AfAnimator *) user_data;
 
-  for (i = 0; i < animator->transitions->len; i++)
+  while (i < animator->transitions->len)
     {
-      AfTransition *transition;
       gdouble transition_progress;
 
       transition = g_ptr_array_index (animator->transitions, i);
 
-      if (progress <= transition->from ||
-          progress >= transition->to)
+      if (progress <= transition->from)
         continue;
 
       transition_progress = progress - transition->from;
       transition_progress /= (transition->to - transition->from);
+      transition_progress = CLAMP (transition_progress, 0.0, 1.0);
 
       af_transition_set_progress (transition, transition_progress);
 
-      /* FIXME: Add already finished transitions to some other array */
+      if (progress >= transition->to)
+        {
+          g_ptr_array_remove_index_fast (animator->transitions, i);
+          g_ptr_array_add (animator->finished_transitions, transition);
+        }
+      else
+        i++;
+    }
+
+  if (progress == 1.0 &&
+      af_timeline_get_loop (timeline))
+    {
+      /* Animation is about to begin again,
+       * dump all finished transitions back.
+       */
+      for (i = 0; i < animator->finished_transitions->len; i++)
+        {
+          transition = g_ptr_array_remove_index_fast (animator->finished_transitions, i);
+          g_ptr_array_add (animator->transitions, transition);
+        }
     }
 }
 
