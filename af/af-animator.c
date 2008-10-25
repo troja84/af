@@ -242,12 +242,18 @@ animator_frame_cb (AfTimeline *timeline,
   for (i = 0; i < animator->transitions->len; i++)
     {
       AfTransition *transition;
+      gdouble transition_progress;
 
       transition = g_ptr_array_index (animator->transitions, i);
 
-      /* FIXME: Calculate normalized progress for the transition */
+      if (progress <= transition->from ||
+          progress >= transition->to)
+        continue;
 
-      af_transition_set_progress (transition, progress);
+      transition_progress = progress - transition->from;
+      transition_progress /= (transition->to - transition->from);
+
+      af_transition_set_progress (transition, transition_progress);
 
       /* FIXME: Add already finished transitions to some other array */
     }
