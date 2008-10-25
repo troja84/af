@@ -565,6 +565,28 @@ af_animator_resume (guint id)
 }
 
 void
+af_animator_reverse (guint id)
+{
+  AfAnimator *animator;
+  AfTimelineDirection direction;
+
+  g_return_if_fail (animators != NULL);
+
+  animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (id));
+
+  g_return_if_fail (animator != NULL);
+
+  direction = af_timeline_get_direction(animator->timeline);
+
+  if (direction == AF_TIMELINE_DIRECTION_FORWARD)
+    af_timeline_set_direction(animator->timeline, 
+                              AF_TIMELINE_DIRECTION_BACKWARD);
+  else
+    af_timeline_set_direction(animator->timeline, 
+                              AF_TIMELINE_DIRECTION_FORWARD);
+}
+
+void
 af_animator_remove (guint id)
 {
   g_return_if_fail (animators != NULL);

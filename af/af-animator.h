@@ -65,6 +65,7 @@ gboolean af_animator_start                       (guint         id,
 void     af_animator_remove                      (guint         id);
 void     af_animator_pause                       (guint         id);
 void     af_animator_resume                      (guint         id);
+void     af_animator_reverse                     (guint         id);
 void     af_animator_set_loop                    (guint         id,
                                                   gboolean      loop);
 
