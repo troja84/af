@@ -33,6 +33,14 @@ pause_cb (GtkButton *button,
 }
 
 static void
+reverse_cb (GtkButton *button,
+          gpointer   user_data)
+{
+  if (id != 0)
+    af_animator_reverse (id);
+}
+
+static void
 stop_cb (GtkButton *button,
          gpointer   user_data)
 {
@@ -77,6 +85,11 @@ main (int argc, char *argv[])
   gtk_box_pack_start (GTK_BOX (bbox), button, FALSE, FALSE, 0);
   g_signal_connect (button, "clicked",
                     G_CALLBACK (stop_cb), NULL);
+
+  button = gtk_button_new_with_label ("Reverse");
+  gtk_box_pack_start (GTK_BOX (bbox), button, FALSE, FALSE, 0);
+  g_signal_connect (button, "clicked",
+                    G_CALLBACK (reverse_cb), NULL);
 
   gtk_box_pack_end (GTK_BOX (box), bbox, FALSE, FALSE, 0);
   gtk_container_add (GTK_CONTAINER (window), box);
