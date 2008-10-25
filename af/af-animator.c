@@ -25,23 +25,12 @@
 #include "af-timeline.h"
 
 static GHashTable *animators = NULL;
-static GHashTable *active_animators = NULL;
 static GHashTable *transformable_types = NULL;
 static guint id_count = 0;
 
-typedef enum AfAnimatorType AfAnimatorType;
 typedef struct AfPropertyRange AfPropertyRange;
-typedef struct AfAnimatorSimple AfAnimatorSimple;
-typedef struct AfAnimatorParallel AfAnimatorParallel;
-typedef union AfAnimator AfAnimator;
-typedef struct AfAnimatorController AfAnimatorController;
-
-enum AfAnimatorType
-{
-  ANIMATOR_TYPE_SIMPLE,
-  ANIMATOR_TYPE_PARALLEL,
-  ANIMATOR_TYPE_SEQUENTIAL
-};
+typedef struct AfTransition AfTransition;
+typedef struct AfAnimator AfAnimator;
 
 struct AfPropertyRange
 {
@@ -50,83 +39,105 @@ struct AfPropertyRange
   GValue to;
 };
 
-struct AfAnimatorSimple
+struct AfTransition
 {
-  AfAnimatorType type;
+  gdouble from;
+  gdouble to;
+
   GObject *object;
   GObject *child;
   GArray *properties;
 };
 
-struct AfAnimatorParallel
-{
-  AfAnimatorType type;
-  GArray *child_animators;
-};
-
-union AfAnimator
-{
-  AfAnimatorType type;
-  AfAnimatorSimple simple;
-  AfAnimatorSimple parallel;
-};
-
-struct AfAnimatorController
+struct AfAnimator
 {
   AfTimeline *timeline;
-  AfAnimator *animator;
+  GPtrArray *transitions;
 };
 
-static void    af_animator_free         (AfAnimator   *animator);
-static void    af_animator_set_progress (AfAnimator   *animator,
-                                         gdouble       progress);
+static AfTransition *
+af_transition_new (GObject *object,
+                   GObject *child,
+                   gdouble  from,
+                   gdouble  to);
+{
+  AfTransition *transition;
 
+  transition = g_slice_new0 (AfTransition);
+  transition->object = g_object_ref (object);
+  transition->from = from;
+  transition->to = to;
+  transition->properties = g_array_new (FALSE, FALSE,
+                                       sizeof (AfPropertyRange));
+
+  if (child)
+    transition->child = g_object_ref (child);
+
+  return transition;
+}
+
+static void
+af_transition_free (AfTransition *transition)
+{
+  g_object_unref (transition->object);
+
+  if (transition->child)
+    g_object_unref (transition->child);
+
+  for (i = 0; i < transition->properties->len; i++)
+    {
+      AfPropertyRange *property_range;
+
+      property_range = &g_array_index (transition->properties, AfPropertyRange, i);
+      g_param_spec_unref (property_range->pspec);
+    }
+
+  g_slice_free (AfTransition, transition);
+}
 
 static AfAnimator *
-af_animator_simple_new (GObject *object,
-                        GObject *child)
+af_animator_new (void)
 {
   AfAnimator *animator;
 
   animator = g_slice_new0 (AfAnimator);
-  animator->simple.object = g_object_ref (object);
-  animator->simple.child = (child) ? g_object_ref (child) : NULL;
-  animator->simple.properties = g_array_new (FALSE, FALSE, sizeof (AfPropertyRange));
+  animator->transitions = g_ptr_array_new ();
 
   return animator;
 }
 
 static void
-af_animator_simple_free (AfAnimatorSimple *animator)
+af_animator_free (AfAnimator *animator)
 {
   guint i;
 
-  g_object_unref (animator->object);
-
-  if (animator->child)
-    g_object_unref (animator->child);
-
-  for (i = 0; i < animator->properties->len; i++)
+  if (animator->timeline)
     {
-      AfPropertyRange *property_range;
-
-      property_range = &g_array_index (animator->properties, AfPropertyRange, i);
-      g_param_spec_unref (property_range->pspec);
+      af_timeline_stop (animator->timeline);
+      g_object_unref (animator->timeline);
     }
 
-  g_array_free (animator->properties, TRUE);
-  g_slice_free (AfAnimator, (AfAnimator *) animator);
+  for (i = 0; i < animator->transitions->len; i++)
+    {
+      AfTransition *transition;
+
+      transition = g_ptr_array_index (animator->transitions, i);
+      af_transition_free (transition);
+    }
+
+  g_ptr_array_free (animator->transitions, TRUE);
+  g_slice_free (AfAnimator, animator);
 }
 
 static void
-af_animator_simple_set_progress (AfAnimatorSimple *animator,
-                                 gdouble           progress)
+af_transition_set_progress (AfTransition *transition,
+                           gdouble        progress)
 {
   GValue value = { 0, };
   GArray *properties;
   guint i;
 
-  properties = animator->properties;
+  properties = transition->properties;
 
   for (i = 0; i < properties->len; i++)
     {
@@ -201,38 +212,19 @@ af_animator_simple_set_progress (AfAnimatorSimple *animator,
 
       if (handled)
         {
-          if (!animator->child)
-            g_object_set_property (animator->object,
+          if (!transition->child)
+            g_object_set_property (transition->object,
                                    property_range->pspec->name,
                                    &value);
           else
-            gtk_container_child_set_property (GTK_CONTAINER (animator->object),
-                                              GTK_WIDGET (animator->child),
+            gtk_container_child_set_property (GTK_CONTAINER (transition->object),
+                                              GTK_WIDGET (transition->child),
                                               property_range->pspec->name,
                                               &value);
         }
 
       g_value_unset (&value);
     }
-}
-
-static void
-af_animator_free (AfAnimator *animator)
-{
-  if (animator->type == ANIMATOR_TYPE_SIMPLE)
-    af_animator_simple_free ((AfAnimatorSimple *) animator);
-  else
-    g_critical ("Animator type not handled");
-}
-
-static void
-af_animator_set_progress (AfAnimator *animator,
-                          gdouble     progress)
-{
-  if (animator->type == ANIMATOR_TYPE_SIMPLE)
-    af_animator_simple_set_progress ((AfAnimatorSimple *) animator, progress);
-  else
-    g_critical ("Animator type not handled");
 }
 
 static void
@@ -243,55 +235,27 @@ animator_frame_cb (AfTimeline *timeline,
   AfAnimator *animator;
 
   animator = (AfAnimator *) user_data;
-  af_animator_set_progress (animator, progress);
-}
-
-static AfAnimatorController *
-af_animator_controller_new (AfAnimator *animator,
-                            guint       duration)
-{
-  AfAnimatorController *controller;
-
-  controller = g_slice_new (AfAnimatorController);
-  controller->timeline = af_timeline_new (duration);
-  controller->animator = animator;
-
-  g_signal_connect (controller->timeline, "frame",
-                    G_CALLBACK (animator_frame_cb), animator);
-
-  return controller;
-}
-
-static void
-af_animator_controller_free (AfAnimatorController *controller)
-{
-  g_object_unref (controller->timeline);
-
-  if (controller->animator)
-    af_animator_free (controller->animator);
-
-  g_slice_free (AfAnimatorController, controller);
 }
 
 static gboolean
-animator_add_tween_property (AfAnimatorSimple *animator,
-                             const gchar      *property_name,
-                             GValue           *to)
+transition_add_property (AfTransition *transition,
+                         const gchar  *property_name,
+                         GValue       *to)
 {
   AfPropertyRange property_range = { 0, };
   GParamSpec *pspec;
 
-  if (!animator->child)
-    pspec = g_object_class_find_property (G_OBJECT_GET_CLASS (animator->object),
+  if (!transition->child)
+    pspec = g_object_class_find_property (G_OBJECT_GET_CLASS (transition->object),
                                           property_name);
   else
-    pspec = gtk_container_class_find_child_property (G_OBJECT_GET_CLASS (animator->object),
+    pspec = gtk_container_class_find_child_property (G_OBJECT_GET_CLASS (transition->object),
                                                      property_name);
 
   if (G_UNLIKELY (!pspec))
     {
       g_warning ("Property '%s' does not exist on object of class '%s'",
-                 property_name, G_OBJECT_TYPE_NAME (animator->object));
+                 property_name, G_OBJECT_TYPE_NAME (transition->object));
       return FALSE;
     }
 
@@ -307,17 +271,17 @@ animator_add_tween_property (AfAnimatorSimple *animator,
 
   g_value_init (&property_range.from, pspec->value_type);
 
-  if (!animator->child)
-    g_object_get_property (animator->object, pspec->name, &property_range.from);
+  if (!transition->child)
+    g_object_get_property (transition->object, pspec->name, &property_range.from);
   else
-    gtk_container_child_get_property (GTK_CONTAINER (animator->object),
-                                      GTK_WIDGET (animator->child),
+    gtk_container_child_get_property (GTK_CONTAINER (transition->object),
+                                      GTK_WIDGET (transition->child),
                                       pspec->name, &property_range.from);
 
   g_value_init (&property_range.to, pspec->value_type);
   g_value_copy (to, &property_range.to);
 
-  g_array_append_val (animator->properties, property_range);
+  g_array_append_val (transition->properties, property_range);
 
   return TRUE;
 }
@@ -335,6 +299,124 @@ af_animator_register_type_transformation (GType                    type,
     g_hash_table_insert (transformable_types,
                          GSIZE_TO_POINTER (type),
                          trans_func);
+}
+
+guint
+af_animator_add (void)
+{
+  AfAnimator *animator;
+  guint id;
+
+  animator = af_animator_new ();
+  id = ++id_count;
+
+  if (G_UNLIKELY (!animators))
+    animators = g_hash_table_new_full (g_direct_hash,
+                                       g_direct_equal,
+                                       NULL,
+                                       (GDestroyNotify) af_animator_free);
+
+  g_hash_table_insert (animators,
+                       GUINT_TO_POINTER (id),
+                       animator);
+  return id;
+}
+
+gboolean
+af_animator_add_transition_valist (guint    anim_id,
+                                   gdouble  from,
+                                   gdouble  to,
+                                   GObject *object,
+                                   va_list  args)
+{
+  AfAnimator *animator;
+  AfTransition *transition;
+  const gchar *property_name;
+
+  g_return_val_if_fail (animators != NULL);
+  g_return_val_if_fail (anim_id != 0, FALSE);
+  g_return_val_if_fail (from >= 0.0 && from <= 1.0, FALSE);
+  g_return_val_if_fail (to >= 0.0 && to <= 1.0, FALSE);
+  g_return_val_if_fail (from <= to, FALSE);
+  g_return_val_if_fail (G_IS_OBJECT (object), FALSE);
+
+  animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (anim_id));
+
+  g_return_val_if_fail (animator != NULL);
+
+  transition = af_transition_new (object, NULL, from, to);
+
+  /* FIXME: Add property ranges */
+
+  g_ptr_array_add (animator->transitions, transition);
+
+  return TRUE;
+}
+
+gboolean
+af_animator_add_transition (guint    anim_id,
+                            gdouble  from,
+                            gdouble  to,
+                            GObject *object,
+                            ...)
+{
+  gboolean result;
+  va_list args;
+
+  va_start (args, object);
+  result = af_animator_add_transition_valist (anim_id, from, to, object, args);
+  va_end (args);
+
+  return result;
+}
+
+gboolean
+af_animator_add_child_transition_valist (guint         anim_id,
+                                         gdouble       from,
+                                         gdouble       to,
+                                         GtkContainer *container,
+                                         GtkWidget    *child,
+                                         va_list       args)
+{
+  AfAnimator *animator;
+  AfTransition *transition;
+
+  g_return_val_if_fail (animators != NULL);
+  g_return_val_if_fail (anim_id != 0, FALSE);
+  g_return_val_if_fail (from >= 0.0 && from <= 1.0, FALSE);
+  g_return_val_if_fail (to >= 0.0 && to <= 1.0, FALSE);
+  g_return_val_if_fail (from <= to, FALSE);
+  g_return_val_if_fail (GTK_IS_CONTAINER (container), FALSE);
+  g_return_val_if_fail (GTK_IS_WIDGET (child), FALSE);
+
+  animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (anim_id));
+
+  g_return_val_if_fail (animator != NULL);
+
+  transition = af_transition_new (container, child, from, to);
+
+  /* FIXME: Add property ranges */
+
+  return TRUE;
+}
+
+gboolean
+af_animator_add_child_transition (guint         anim_id,
+                                  gdouble       from,
+                                  gdouble       to,
+                                  GtkContainer *container,
+                                  GtkWidget    *child,
+                                  ...)
+{
+  gboolean result;
+  va_list args;
+
+  va_start (args, child);
+  result = af_animator_add_child_transition_valist (anim_id, from, to,
+                                                    container, child, args);
+  va_end (args);
+
+  return result;
 }
 
 static guint
@@ -538,7 +620,6 @@ gboolean
 af_animator_start (guint id,
                    guint duration)
 {
-  AfAnimatorController *controller;
   AfAnimator *animator;
 
   g_return_val_if_fail (animators != NULL, FALSE);
@@ -546,69 +627,65 @@ af_animator_start (guint id,
   animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (id));
 
   g_return_val_if_fail (animator != NULL, FALSE);
+  g_return_val_if_fail (animator->timeline != NULL, FALSE);
 
-  controller = af_animator_controller_new (animator, duration);
+  animator->timeline = af_timeline_new (duration);
 
-  if (G_UNLIKELY (!active_animators))
-    active_animators = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL,
-                                              (GDestroyNotify) af_animator_controller_free);
+  g_signal_connect (animator->timeline, "frame",
+                    G_CALLBACK (animator_frame_cb), animator);
 
-  g_hash_table_insert (active_animators,
-                       GUINT_TO_POINTER (id),
-                       controller);
-
-  af_timeline_start (controller->timeline);
+  af_timeline_start (animator->timeline);
 
   return TRUE;
 }
 
 void
-af_animator_stop (guint id)
+af_animator_pause (guint id)
 {
-  AfAnimatorController *controller;
+  AfAnimator *animator;
 
-  g_return_if_fail (active_animators != NULL);
+  g_return_if_fail (animators != NULL);
 
-  controller = g_hash_table_lookup (active_animators, GUINT_TO_POINTER (id));
+  animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (id));
 
-  g_return_if_fail (controller != NULL);
+  g_return_if_fail (animator != NULL);
 
-  af_timeline_pause (controller->timeline);
+  af_timeline_pause (animator->timeline);
 }
 
 void
 af_animator_resume (guint id)
 {
-  AfAnimatorController *controller;
+  AfAnimator *animator;
 
-  g_return_if_fail (active_animators != NULL);
+  g_return_if_fail (animators != NULL);
 
-  controller = g_hash_table_lookup (active_animators, GUINT_TO_POINTER (id));
+  animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (id));
 
-  g_return_if_fail (controller != NULL);
+  g_return_if_fail (animator != NULL);
 
-  af_timeline_start (controller->timeline);
+  af_timeline_start (animator->timeline);
 }
 
 void
 af_animator_remove (guint id)
 {
-  g_return_if_fail (active_animators != NULL);
+  g_return_if_fail (animators != NULL);
 
-  g_hash_table_remove (active_animators, GUINT_TO_POINTER (id));
+  g_hash_table_remove (animators, GUINT_TO_POINTER (id));
 }
 
 void
 af_animator_set_loop (guint    id,
                       gboolean loop)
 {
-  AfAnimatorController *controller;
+  AfAnimator *animator;
 
-  g_return_if_fail (active_animators != NULL);
+  g_return_if_fail (animators != NULL);
 
-  controller = g_hash_table_lookup (active_animators, GUINT_TO_POINTER (id));
+  animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (id));
 
-  g_return_if_fail (controller != NULL);
+  g_return_if_fail (animator != NULL);
 
-  af_timeline_set_loop (controller->timeline, loop);
+  af_timeline_set_loop (animator->timeline, loop);
 }

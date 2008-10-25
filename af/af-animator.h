@@ -33,37 +33,41 @@ typedef void (*AfTypeTransformationFunc) (const GValue *from,
 void  af_animator_register_type_transformation (GType                    type,
                                                 AfTypeTransformationFunc trans_func);
 
-guint af_animator_tween_property       (gpointer      object,
-                                        const gchar  *property_name,
-                                        GValue       *to);
-guint af_animator_tween_child_property (GtkContainer *container,
-                                        GtkWidget    *child,
-                                        const gchar  *property_name,
-                                        GValue       *to);
+guint    af_animator_add                         (void);
 
-void  af_animator_add_tween_property   (guint         id,
-                                        const gchar  *property_name,
-                                        GValue       *to);
+gboolean af_animator_add_transition_valist       (guint         anim_id,
+                                                  gdouble       from,
+                                                  gdouble       to,
+                                                  GObject      *object,
+                                                  va_list       var_args);
+gboolean af_animator_add_child_transition_valist (guint         anim_id,
+                                                  gdouble       from,
+                                                  gdouble       to,
+                                                  GtkContainer *container,
+                                                  GtkWidget    *child,
+                                                  va_list       var_args);
 
-guint af_animator_tween_valist         (gpointer      object,
-                                        va_list       args);
-guint af_animator_child_tween_valist   (GtkContainer *container,
-                                        GtkWidget    *child,
-                                        va_list       args);
+gboolean af_animator_add_transition              (guint         anim_id,
+                                                  gdouble       from,
+                                                  gdouble       to,
+                                                  GObject      *object,
+                                                  const gchar  *property_name,
+                                                  ...);
+gboolean af_animator_add_child_transition        (guint         anim_id,
+                                                  gdouble       from,
+                                                  gdouble       to,
+                                                  GtkContainer *container,
+                                                  GtkWidget    *child,
+                                                  const gchar  *property_name,
+                                                  ...);
 
-guint af_animator_tween                (gpointer      object,
-                                        ...);
-guint af_animator_child_tween          (GtkContainer *container,
-                                        GtkWidget    *child,
-                                        ...);
+gboolean af_animator_start                       (guint         id,
+                                                  guint         duration);
 
-gboolean af_animator_start             (guint         id,
-                                        guint         duration);
-
-void     af_animator_stop              (guint         id);
-void     af_animator_resume            (guint         id);
-void     af_animator_set_loop          (guint         id,
-                                        gboolean      loop);
+void     af_animator_pause                       (guint         id);
+void     af_animator_resume                      (guint         id);
+void     af_animator_set_loop                    (guint         id,
+                                                  gboolean      loop);
 
 
 G_END_DECLS
