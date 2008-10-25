@@ -95,6 +95,7 @@ af_transition_free (AfTransition *transition)
       g_param_spec_unref (property_range->pspec);
     }
 
+  g_array_free (transition->properties, TRUE);
   g_slice_free (AfTransition, transition);
 }
 
