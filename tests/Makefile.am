@@ -11,6 +11,7 @@ noinst_PROGRAMS = \
 	test-chained-transitions \
 	test-child-anim \
 	test-custom-transform \
+	test-overlapping-transitions \
 	test-simple-anim
 
 test_simple_anim_SOURCES = \
@@ -39,3 +40,8 @@ test_chained_transitions_SOURCES = \
 	test-chained-transitions.c
 
 test_chained_transitions_LDADD = $(LDADDS)
+
+test_overlapping_transitions_SOURCES = \
+	test-overlapping-transitions.c
+
+test_overlapping_transitions_LDADD = $(LDADDS)
