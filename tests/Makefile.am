@@ -8,6 +8,7 @@ LDADDS = \
 
 noinst_PROGRAMS = \
 	test-anim-control \
+	test-chained-transitions \
 	test-child-anim \
 	test-custom-transform \
 	test-simple-anim
@@ -33,3 +34,8 @@ test_anim_control_SOURCES = \
 	test-anim-control.c
 
 test_anim_control_LDADD = $(LDADDS)
+
+test_chained_transitions_SOURCES = \
+	test-chained-transitions.c
+
+test_chained_transitions_LDADD = $(LDADDS)

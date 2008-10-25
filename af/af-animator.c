@@ -150,6 +150,23 @@ af_transition_set_progress (AfTransition *transition,
       GType type;
 
       property_range = &g_array_index (properties, AfPropertyRange, i);
+
+      if (G_UNLIKELY (G_VALUE_TYPE (&property_range->from) == G_TYPE_INVALID))
+        {
+          g_value_init (&property_range->from,
+                        property_range->pspec->value_type);
+
+          if (!transition->child)
+            g_object_get_property (transition->object,
+                                   property_range->pspec->name,
+                                   &property_range->from);
+          else
+            gtk_container_child_get_property (GTK_CONTAINER (transition->object),
+                                              GTK_WIDGET (transition->child),
+                                              property_range->pspec->name,
+                                              &property_range->from);
+        }
+
       g_value_init (&value, property_range->pspec->value_type);
       type = property_range->pspec->value_type;
 
@@ -249,7 +266,10 @@ animator_frame_cb (AfTimeline *timeline,
       transition = g_ptr_array_index (animator->transitions, i);
 
       if (progress <= transition->from)
-        continue;
+        {
+          i++;
+          continue;
+        }
 
       transition_progress = progress - transition->from;
       transition_progress /= (transition->to - transition->from);
@@ -272,9 +292,9 @@ animator_frame_cb (AfTimeline *timeline,
       /* Animation is about to begin again,
        * dump all finished transitions back.
        */
-      for (i = 0; i < animator->finished_transitions->len; i++)
+      while (animator->finished_transitions->len > 0)
         {
-          transition = g_ptr_array_remove_index_fast (animator->finished_transitions, i);
+          transition = g_ptr_array_remove_index_fast (animator->finished_transitions, 0);
           g_ptr_array_add (animator->transitions, transition);
         }
     }
@@ -296,15 +316,6 @@ transition_add_property (AfTransition *transition,
     }
 
   property_range.pspec = g_param_spec_ref (pspec);
-
-  g_value_init (&property_range.from, pspec->value_type);
-
-  if (!transition->child)
-    g_object_get_property (transition->object, pspec->name, &property_range.from);
-  else
-    gtk_container_child_get_property (GTK_CONTAINER (transition->object),
-                                      GTK_WIDGET (transition->child),
-                                      pspec->name, &property_range.from);
 
   g_value_init (&property_range.to, pspec->value_type);
   g_value_copy (to, &property_range.to);
