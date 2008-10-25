@@ -46,6 +46,8 @@ struct AfTimelinePriv
   guint animations_enabled : 1;
   guint loop               : 1;
   guint direction          : 1;
+
+  gdouble last_progress;
 };
 
 enum {
@@ -192,6 +194,8 @@ af_timeline_init (AfTimeline *timeline)
   priv->duration = 0.0;
   priv->direction = AF_TIMELINE_DIRECTION_FORWARD;
   priv->screen = gdk_screen_get_default ();
+
+  priv->last_progress = 0;
 }
 
 static void
@@ -329,19 +333,25 @@ static gboolean
 af_timeline_run_frame (AfTimeline *timeline)
 {
   AfTimelinePriv *priv;
-  gdouble linear_progress, progress;
+  gdouble linear_progress, delta_progress, progress;
   guint elapsed_time;
   AfTimelineProgressFunc progress_func = NULL;
 
   priv = AF_TIMELINE_GET_PRIV (timeline);
 
   elapsed_time = (guint) (g_timer_elapsed (priv->timer, NULL) * 1000);
-  linear_progress = (gdouble) elapsed_time / priv->duration;
+  g_timer_start (priv->timer);
+  linear_progress = priv->last_progress;
+  delta_progress = (gdouble) elapsed_time / priv->duration;
 
   if (priv->animations_enabled)
     {
       if (priv->direction == AF_TIMELINE_DIRECTION_BACKWARD)
-	linear_progress = 1 - linear_progress;
+	linear_progress -= delta_progress;
+      else
+	linear_progress += delta_progress;
+      
+      priv->last_progress = linear_progress;
 
       linear_progress = CLAMP (linear_progress, 0., 1.);
 
@@ -497,6 +507,11 @@ af_timeline_rewind (AfTimeline *timeline)
   /* reset timer */
   if (priv->timer)
     {
+      if (af_timeline_get_direction(timeline) != AF_TIMELINE_DIRECTION_FORWARD)
+      	priv->last_progress = 1.0;
+      else
+	priv->last_progress = 0;
+
       g_timer_start (priv->timer);
       if (!priv->source_id)
         g_timer_stop (priv->timer);
