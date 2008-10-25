@@ -18,12 +18,11 @@ main (int argc, char *argv[])
         gtk_container_add (GTK_CONTAINER (window), label);
 
         id = af_animator_tween (G_OBJECT (label),
+                                1000,
                                 "xalign", 1.,
                                 "yalign", 0.,
                                 "angle", 90.,
                                 NULL);
-
-        af_animator_start (id, 1000);
 
         gtk_widget_show_all (window);
 

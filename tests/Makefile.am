@@ -1,4 +1,5 @@
 INCLUDES = \
+	-Wall \
 	-I$(top_srcdir) \
 	$(AF_CFLAGS)
 LDADDS = \

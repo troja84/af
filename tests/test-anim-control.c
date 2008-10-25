@@ -14,10 +14,10 @@ play_cb (GtkButton *button,
                 "xalign", 0.0,
                 NULL);
 
-      id = af_animator_tween (label,
+      id = af_animator_tween (G_OBJECT (label),
+                              1000,
                               "xalign", 1.0,
                               NULL);
-      af_animator_start (id, 1000);
       af_animator_set_loop (id, TRUE);
     }
   else
@@ -29,7 +29,7 @@ pause_cb (GtkButton *button,
           gpointer   user_data)
 {
   if (id != 0)
-    af_animator_stop (id);
+    af_animator_pause (id);
 }
 
 static void
@@ -81,4 +81,6 @@ main (int argc, char *argv[])
   gtk_widget_show_all (window);
 
   gtk_main ();
+
+  return 0;
 }

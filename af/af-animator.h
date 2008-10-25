@@ -51,24 +51,31 @@ gboolean af_animator_add_transition              (guint         anim_id,
                                                   gdouble       from,
                                                   gdouble       to,
                                                   GObject      *object,
-                                                  const gchar  *property_name,
                                                   ...);
 gboolean af_animator_add_child_transition        (guint         anim_id,
                                                   gdouble       from,
                                                   gdouble       to,
                                                   GtkContainer *container,
                                                   GtkWidget    *child,
-                                                  const gchar  *property_name,
                                                   ...);
 
 gboolean af_animator_start                       (guint         id,
                                                   guint         duration);
 
+void     af_animator_remove                      (guint         id);
 void     af_animator_pause                       (guint         id);
 void     af_animator_resume                      (guint         id);
 void     af_animator_set_loop                    (guint         id,
                                                   gboolean      loop);
 
+/* Helper functions */
+guint    af_animator_tween                       (GObject      *object,
+                                                  guint         duration,
+                                                  ...);
+guint    af_animator_child_tween                 (GtkContainer *container,
+                                                  GtkWidget    *child,
+                                                  guint         duration,
+                                                  ...);
 
 G_END_DECLS
 
