@@ -526,6 +526,9 @@ af_animator_start (guint id,
 
   g_signal_connect (animator->timeline, "frame",
                     G_CALLBACK (animator_frame_cb), animator);
+  g_signal_connect_swapped (animator->timeline, "finished",
+                            G_CALLBACK (af_animator_remove),
+                            GUINT_TO_POINTER (id));
 
   af_timeline_start (animator->timeline);
 
