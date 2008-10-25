@@ -22,6 +22,7 @@
 
 #include <glib.h>
 #include <gtk/gtk.h>
+#include "af-enums.h"
 
 G_BEGIN_DECLS
 
@@ -35,28 +36,32 @@ void  af_animator_register_type_transformation (GType                    type,
 
 guint    af_animator_add                         (void);
 
-gboolean af_animator_add_transition_valist       (guint         anim_id,
-                                                  gdouble       from,
-                                                  gdouble       to,
-                                                  GObject      *object,
-                                                  va_list       var_args);
-gboolean af_animator_add_child_transition_valist (guint         anim_id,
-                                                  gdouble       from,
-                                                  gdouble       to,
-                                                  GtkContainer *container,
-                                                  GtkWidget    *child,
-                                                  va_list       var_args);
+gboolean af_animator_add_transition_valist       (guint                   anim_id,
+                                                  gdouble                 from,
+                                                  gdouble                 to,
+                                                  AfTimelineProgressType  type,
+                                                  GObject                *object,
+                                                  va_list                 var_args);
+gboolean af_animator_add_child_transition_valist (guint                   anim_id,
+                                                  gdouble                 from,
+                                                  gdouble                 to,
+                                                  AfTimelineProgressType  type,
+                                                  GtkContainer           *container,
+                                                  GtkWidget              *child,
+                                                  va_list                 var_args);
 
-gboolean af_animator_add_transition              (guint         anim_id,
-                                                  gdouble       from,
-                                                  gdouble       to,
-                                                  GObject      *object,
+gboolean af_animator_add_transition              (guint                   anim_id,
+                                                  gdouble                 from,
+                                                  gdouble                 to,
+                                                  AfTimelineProgressType  type,
+                                                  GObject                *object,
                                                   ...);
-gboolean af_animator_add_child_transition        (guint         anim_id,
-                                                  gdouble       from,
-                                                  gdouble       to,
-                                                  GtkContainer *container,
-                                                  GtkWidget    *child,
+gboolean af_animator_add_child_transition        (guint                   anim_id,
+                                                  gdouble                 from,
+                                                  gdouble                 to,
+                                                  AfTimelineProgressType  type,
+                                                  GtkContainer           *container,
+                                                  GtkWidget              *child,
                                                   ...);
 
 gboolean af_animator_start                       (guint         id,
@@ -70,12 +75,14 @@ void     af_animator_set_loop                    (guint         id,
                                                   gboolean      loop);
 
 /* Helper functions */
-guint    af_animator_tween                       (GObject      *object,
-                                                  guint         duration,
+guint    af_animator_tween                       (GObject                *object,
+                                                  guint                   duration,
+                                                  AfTimelineProgressType  type,
                                                   ...);
-guint    af_animator_child_tween                 (GtkContainer *container,
-                                                  GtkWidget    *child,
-                                                  guint         duration,
+guint    af_animator_child_tween                 (GtkContainer           *container,
+                                                  GtkWidget              *child,
+                                                  guint                   duration,
+                                                  AfTimelineProgressType  type,
                                                   ...);
 
 G_END_DECLS

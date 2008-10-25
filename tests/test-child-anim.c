@@ -24,6 +24,7 @@ main (int argc, char *argv[])
   id = af_animator_child_tween (GTK_CONTAINER (fixed),
                                 label,
                                 1000,
+                                AF_TIMELINE_PROGRESS_LINEAR,
                                 "x", 200,
                                 "y", 200,
                                 NULL);

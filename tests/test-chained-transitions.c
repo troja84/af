@@ -28,21 +28,25 @@ main (int argc, char *argv[])
 
   af_animator_add_transition (id,
                               0., 0.25,
+                              AF_TIMELINE_PROGRESS_LINEAR,
                               G_OBJECT (label),
                               "xalign", 1.,
                               NULL);
   af_animator_add_transition (id,
                               0.25, 0.5,
+                              AF_TIMELINE_PROGRESS_EASE_IN_EASE_OUT,
                               G_OBJECT (label),
                               "yalign", 1.,
                               NULL);
   af_animator_add_transition (id,
                               0.5, 0.75,
+                              AF_TIMELINE_PROGRESS_EXPONENTIAL,
                               G_OBJECT (label),
                               "xalign", 0.,
                               NULL);
   af_animator_add_transition (id,
                               0.75, 1.,
+                              AF_TIMELINE_PROGRESS_SINUSOIDAL,
                               G_OBJECT (label),
                               "yalign", 0.,
                               NULL);

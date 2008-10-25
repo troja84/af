@@ -43,6 +43,7 @@ struct AfTransition
 {
   gdouble from;
   gdouble to;
+  AfTimelineProgressType type;
 
   GObject *object;
   GObject *child;
@@ -57,10 +58,11 @@ struct AfAnimator
 };
 
 static AfTransition *
-af_transition_new (GObject *object,
-                   GObject *child,
-                   gdouble  from,
-                   gdouble  to)
+af_transition_new (GObject                *object,
+                   GObject                *child,
+                   gdouble                 from,
+                   gdouble                 to,
+                   AfTimelineProgressType  type)
 {
   AfTransition *transition;
 
@@ -68,6 +70,7 @@ af_transition_new (GObject *object,
   transition->object = g_object_ref (object);
   transition->from = from;
   transition->to = to;
+  transition->type = type;
   transition->properties = g_array_new (FALSE, FALSE,
                                        sizeof (AfPropertyRange));
 
@@ -136,13 +139,14 @@ af_animator_free (AfAnimator *animator)
 
 static void
 af_transition_set_progress (AfTransition *transition,
-                            gdouble        progress)
+                            gdouble       progress)
 {
   GValue value = { 0, };
   GArray *properties;
   guint i;
 
   properties = transition->properties;
+  progress = af_timeline_calculate_progress (progress, transition->type);
 
   for (i = 0; i < properties->len; i++)
     {
@@ -411,11 +415,12 @@ af_animator_add (void)
 }
 
 gboolean
-af_animator_add_transition_valist (guint    anim_id,
-                                   gdouble  from,
-                                   gdouble  to,
-                                   GObject *object,
-                                   va_list  args)
+af_animator_add_transition_valist (guint                   anim_id,
+                                   gdouble                 from,
+                                   gdouble                 to,
+                                   AfTimelineProgressType  type,
+                                   GObject                *object,
+                                   va_list                 args)
 {
   AfAnimator *animator;
   AfTransition *transition;
@@ -431,7 +436,7 @@ af_animator_add_transition_valist (guint    anim_id,
 
   g_return_val_if_fail (animator != NULL, FALSE);
 
-  transition = af_transition_new (object, NULL, from, to);
+  transition = af_transition_new (object, NULL, from, to, type);
 
   transition_add_properties (transition, args);
 
@@ -441,29 +446,34 @@ af_animator_add_transition_valist (guint    anim_id,
 }
 
 gboolean
-af_animator_add_transition (guint    anim_id,
-                            gdouble  from,
-                            gdouble  to,
-                            GObject *object,
+af_animator_add_transition (guint                   anim_id,
+                            gdouble                 from,
+                            gdouble                 to,
+                            AfTimelineProgressType  type,
+                            GObject                *object,
                             ...)
 {
   gboolean result;
   va_list args;
 
   va_start (args, object);
-  result = af_animator_add_transition_valist (anim_id, from, to, object, args);
+  result = af_animator_add_transition_valist (anim_id,
+                                              from, to,
+                                              type,
+                                              object, args);
   va_end (args);
 
   return result;
 }
 
 gboolean
-af_animator_add_child_transition_valist (guint         anim_id,
-                                         gdouble       from,
-                                         gdouble       to,
-                                         GtkContainer *container,
-                                         GtkWidget    *child,
-                                         va_list       args)
+af_animator_add_child_transition_valist (guint                   anim_id,
+                                         gdouble                 from,
+                                         gdouble                 to,
+                                         AfTimelineProgressType  type,
+                                         GtkContainer           *container,
+                                         GtkWidget              *child,
+                                         va_list                 args)
 {
   AfAnimator *animator;
   AfTransition *transition;
@@ -482,7 +492,8 @@ af_animator_add_child_transition_valist (guint         anim_id,
 
   transition = af_transition_new (G_OBJECT (container),
                                   G_OBJECT (child),
-                                  from, to);
+                                  from, to,
+                                  type);
 
   transition_add_properties (transition, args);
 
@@ -492,18 +503,21 @@ af_animator_add_child_transition_valist (guint         anim_id,
 }
 
 gboolean
-af_animator_add_child_transition (guint         anim_id,
-                                  gdouble       from,
-                                  gdouble       to,
-                                  GtkContainer *container,
-                                  GtkWidget    *child,
+af_animator_add_child_transition (guint                   anim_id,
+                                  gdouble                 from,
+                                  gdouble                 to,
+                                  AfTimelineProgressType  type,
+                                  GtkContainer           *container,
+                                  GtkWidget              *child,
                                   ...)
 {
   gboolean result;
   va_list args;
 
   va_start (args, child);
-  result = af_animator_add_child_transition_valist (anim_id, from, to,
+  result = af_animator_add_child_transition_valist (anim_id,
+                                                    from, to,
+                                                    type,
                                                     container, child, args);
   va_end (args);
 
@@ -610,8 +624,9 @@ af_animator_set_loop (guint    id,
 }
 
 guint
-af_animator_tween (GObject *object,
-                   guint    duration,
+af_animator_tween (GObject                *object,
+                   guint                   duration,
+                   AfTimelineProgressType  type,
                    ...)
 {
   va_list args;
@@ -621,10 +636,11 @@ af_animator_tween (GObject *object,
 
   anim_id = af_animator_add ();
 
-  va_start (args, duration);
+  va_start (args, type);
 
   af_animator_add_transition_valist (anim_id,
                                      0.0, 1.0,
+                                     type,
                                      object,
                                      args);
   va_end (args);
@@ -635,9 +651,10 @@ af_animator_tween (GObject *object,
 }
 
 guint
-af_animator_child_tween (GtkContainer *container,
-                         GtkWidget    *child,
-                         guint         duration,
+af_animator_child_tween (GtkContainer           *container,
+                         GtkWidget              *child,
+                         guint                   duration,
+                         AfTimelineProgressType  type,
                          ...)
 {
   va_list args;
@@ -648,10 +665,11 @@ af_animator_child_tween (GtkContainer *container,
 
   anim_id = af_animator_add ();
 
-  va_start (args, duration);
+  va_start (args, type);
 
   af_animator_add_child_transition_valist (anim_id,
                                            0.0, 1.0,
+                                           type,
                                            container,
                                            child,
                                            args);

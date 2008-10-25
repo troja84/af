@@ -43,6 +43,7 @@ main (int argc, char *argv[])
 
   id = af_animator_tween (G_OBJECT (color_area),
                           500,
+                          AF_TIMELINE_PROGRESS_EXPONENTIAL,
                           "background-color", &to,
                           NULL);
 

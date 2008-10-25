@@ -19,6 +19,7 @@ main (int argc, char *argv[])
 
         id = af_animator_tween (G_OBJECT (label),
                                 1000,
+                                AF_TIMELINE_PROGRESS_LINEAR,
                                 "xalign", 1.,
                                 "yalign", 0.,
                                 "angle", 90.,
