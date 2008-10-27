@@ -63,8 +63,11 @@ struct AfTimelineClass
 GType                 af_timeline_get_type           (void) G_GNUC_CONST;
 
 AfTimeline           *af_timeline_new                (guint                    duration);
+AfTimeline           *af_timeline_new_n_frames       (guint                    n_frames,
+						      guint                    fps);
 AfTimeline           *af_timeline_new_for_screen     (guint                    duration,
                                                       GdkScreen               *screen);
+AfTimeline           *af_timeline_clone              (AfTimeline              *timeline);
 
 void                  af_timeline_start              (AfTimeline              *timeline);
 void                  af_timeline_pause              (AfTimeline              *timeline);
@@ -83,6 +86,10 @@ void                  af_timeline_set_loop           (AfTimeline              *t
 guint                 af_timeline_get_duration       (AfTimeline              *timeline);
 void                  af_timeline_set_duration       (AfTimeline              *timeline,
                                                       guint                    duration);
+
+guint                 af_timeline_get_n_frames       (AfTimeline              *timeline);
+void                  af_timeline_set_n_frames       (AfTimeline              *timeline,
+                                                      guint                    n_frames);
 
 GdkScreen            *af_timeline_get_screen         (AfTimeline              *timeline);
 void                  af_timeline_set_screen         (AfTimeline              *timeline,

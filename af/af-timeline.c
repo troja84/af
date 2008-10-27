@@ -344,12 +344,33 @@ af_timeline_new (guint duration)
 }
 
 AfTimeline *
+af_timeline_new_n_frames (guint n_frames,
+		 	  guint fps)
+{
+  return g_object_new (AF_TYPE_TIMELINE,
+		       "duration", ((gdouble) (n_frames * 1000) / fps),
+		       NULL);
+}
+
+AfTimeline *
 af_timeline_new_for_screen (guint      duration,
                             GdkScreen *screen)
 {
   return g_object_new (AF_TYPE_TIMELINE,
 		       "duration", duration,
 		       "screen", screen,
+		       NULL);
+}
+
+AfTimeline *
+af_timeline_clone (AfTimeline *timeline)
+{
+  return g_object_new (AF_TYPE_TIMELINE,
+		       "fps", af_timeline_get_fps (timeline),
+		       "direction", af_timeline_get_direction (timeline),
+		       "loop", af_timeline_get_loop (timeline),
+		       "duration", af_timeline_get_duration (timeline),
+		       "screen", af_timeline_get_screen (timeline),
 		       NULL);
 }
 
@@ -591,6 +612,34 @@ af_timeline_get_duration (AfTimeline *timeline)
   priv = AF_TIMELINE_GET_PRIV (timeline);
 
   return priv->duration;
+}
+
+void
+af_timeline_set_n_frames (AfTimeline *timeline,
+			  guint	     n_frames)
+{
+  AfTimelinePriv *priv;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  priv->duration = ((gdouble) n_frames * 1000) / priv->fps;
+
+  g_object_notify (G_OBJECT (timeline), "duration");
+
+}
+
+guint
+af_timeline_get_n_frames (AfTimeline *timeline)
+{
+  AfTimelinePriv *priv;
+
+  g_return_val_if_fail (AF_IS_TIMELINE (timeline), 0);
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  return (((gdouble) priv->duration * priv->fps) / 1000);
 }
 
 /**
