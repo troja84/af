@@ -15,10 +15,32 @@ play_cb (GtkButton *button,
                 NULL);
 
       id = af_animator_tween (G_OBJECT (label),
-                              1000,
+                              3000,
                               AF_TIMELINE_PROGRESS_LINEAR,
                               "xalign", 1.0,
                               NULL);
+      af_animator_set_loop (id, TRUE);
+    }
+  else
+    af_animator_resume (id);
+}
+
+static void
+play_delay_cb (GtkButton *button,
+               gpointer   user_data)
+{
+  if (id == 0)
+    {
+      g_object_set (label,
+                "xalign", 0.0,
+                NULL);
+
+      id = af_animator_tween_delay (G_OBJECT (label),
+                                    3000,
+				    3000, 
+				    AF_TIMELINE_PROGRESS_LINEAR,
+				    "xalign", 1.0,
+				    NULL);
       af_animator_set_loop (id, TRUE);
     }
   else
@@ -50,6 +72,22 @@ stop_cb (GtkButton *button,
       af_animator_remove (id);
       id = 0;
     }
+}
+
+static void
+skip_cb (GtkButton *button,
+         gpointer   user_data)
+{
+  if (id != 0)
+    af_animator_skip (id, 21);
+}
+
+static void
+advance_cb (GtkButton *button,
+            gpointer   user_data)
+{
+  if (id != 0)
+    af_animator_advance (id, 45);
 }
 
 int
@@ -93,6 +131,26 @@ main (int argc, char *argv[])
                     G_CALLBACK (reverse_cb), NULL);
 
   gtk_box_pack_end (GTK_BOX (box), bbox, FALSE, FALSE, 0);
+
+  bbox = gtk_hbutton_box_new ();
+
+  button = gtk_button_new_from_stock (GTK_STOCK_MEDIA_FORWARD);
+  gtk_box_pack_start (GTK_BOX (bbox), button, FALSE, FALSE, 0);
+  g_signal_connect (button, "clicked",
+                    G_CALLBACK (skip_cb), NULL);
+
+  button = gtk_button_new_from_stock (GTK_STOCK_MEDIA_NEXT);
+  gtk_box_pack_start (GTK_BOX (bbox), button, FALSE, FALSE, 0);
+  g_signal_connect (button, "clicked",
+                    G_CALLBACK (advance_cb), NULL);
+
+  button = gtk_button_new_from_stock (GTK_STOCK_REFRESH);
+  gtk_box_pack_start (GTK_BOX (bbox), button, FALSE, FALSE, 0);
+  g_signal_connect (button, "clicked",
+                    G_CALLBACK (play_delay_cb), NULL);
+
+  gtk_box_pack_end (GTK_BOX (box), bbox, FALSE, FALSE, 0);
+
   gtk_container_add (GTK_CONTAINER (window), box);
 
   gtk_widget_show_all (window);

@@ -528,6 +528,14 @@ gboolean
 af_animator_start (guint id,
                    guint duration)
 {
+  return af_animator_start_delay (id, duration, 0);
+}
+
+gboolean
+af_animator_start_delay (guint id,
+                         guint duration,
+		         guint delay)
+{
   AfAnimator *animator;
 
   g_return_val_if_fail (animators != NULL, FALSE);
@@ -538,6 +546,9 @@ af_animator_start (guint id,
   g_return_val_if_fail (animator->timeline == NULL, FALSE);
 
   animator->timeline = af_timeline_new (duration);
+
+  if (delay > 0)
+    af_timeline_set_delay (animator->timeline, delay);
 
   g_signal_connect (animator->timeline, "frame",
                     G_CALLBACK (animator_frame_cb), animator);
@@ -601,6 +612,36 @@ af_animator_reverse (guint id)
 }
 
 void
+af_animator_skip (guint id,
+		  guint n_frames)
+{
+  AfAnimator *animator;
+
+  g_return_if_fail (animators != NULL);
+
+  animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (id));
+
+  g_return_if_fail (animator != NULL);
+
+  af_timeline_skip (animator->timeline, n_frames);
+}
+
+void
+af_animator_advance (guint id,
+		     guint frame_num)
+{
+  AfAnimator *animator;
+
+  g_return_if_fail (animators != NULL);
+
+  animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (id));
+
+  g_return_if_fail (animator != NULL);
+
+  af_timeline_advance (animator->timeline, frame_num);
+}
+
+void
 af_animator_remove (guint id)
 {
   g_return_if_fail (animators != NULL);
@@ -648,6 +689,35 @@ af_animator_tween (GObject                *object,
   af_animator_start (anim_id, duration);
 
   return anim_id;
+
+}
+
+guint
+af_animator_tween_delay (GObject                *object,
+                         guint                   duration,
+                         guint                   delay,
+                         AfTimelineProgressType  type,
+                         ...)
+{
+  va_list args;
+  guint anim_id;
+
+  g_return_val_if_fail (G_IS_OBJECT (object), 0);
+
+  anim_id = af_animator_add ();
+
+  va_start (args, type);
+
+  af_animator_add_transition_valist (anim_id,
+                                     0.0, 1.0,
+                                     type,
+                                     object,
+                                     args);
+  va_end (args);
+
+  af_animator_start_delay (anim_id, duration, delay);
+
+  return anim_id;
 }
 
 guint
@@ -676,6 +746,37 @@ af_animator_child_tween (GtkContainer           *container,
   va_end (args);
 
   af_animator_start (anim_id, duration);
+
+  return anim_id;
+}
+	
+guint
+af_animator_child_tween_delay (GtkContainer           *container,
+                               GtkWidget              *child,
+                               guint                   duration,
+                               guint                   delay,
+                               AfTimelineProgressType  type,
+                               ...)
+{
+  va_list args;
+  guint anim_id;
+
+  g_return_val_if_fail (GTK_IS_CONTAINER (container), 0);
+  g_return_val_if_fail (GTK_IS_WIDGET (child), 0);
+
+  anim_id = af_animator_add ();
+
+  va_start (args, type);
+
+  af_animator_add_child_transition_valist (anim_id,
+                                           0.0, 1.0,
+                                           type,
+                                           container,
+                                           child,
+                                           args);
+  va_end (args);
+
+  af_animator_start_delay (anim_id, duration, delay);
 
   return anim_id;
 }

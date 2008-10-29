@@ -72,6 +72,10 @@ AfTimeline           *af_timeline_clone              (AfTimeline              *t
 void                  af_timeline_start              (AfTimeline              *timeline);
 void                  af_timeline_pause              (AfTimeline              *timeline);
 void                  af_timeline_rewind             (AfTimeline              *timeline);
+void                  af_timeline_skip               (AfTimeline              *timeline,
+		                                      guint                    n_frames);
+void                  af_timeline_advance            (AfTimeline              *timeline,
+		                                      guint                    frame_num);
 
 gboolean              af_timeline_is_running         (AfTimeline              *timeline);
 
@@ -86,6 +90,10 @@ void                  af_timeline_set_loop           (AfTimeline              *t
 guint                 af_timeline_get_duration       (AfTimeline              *timeline);
 void                  af_timeline_set_duration       (AfTimeline              *timeline,
                                                       guint                    duration);
+
+guint                 af_timeline_get_delay          (AfTimeline              *timeline);
+void                  af_timeline_set_delay          (AfTimeline              *timeline,
+                                                      guint                    delay);
 
 guint                 af_timeline_get_n_frames       (AfTimeline              *timeline);
 void                  af_timeline_set_n_frames       (AfTimeline              *timeline,

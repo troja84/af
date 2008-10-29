@@ -36,6 +36,7 @@ struct AfTimelinePriv
   guint duration;
   guint fps;
   guint source_id;
+  guint delay;
 
   GTimer *timer;
 
@@ -44,14 +45,18 @@ struct AfTimelinePriv
   guint animations_enabled : 1;
   guint loop               : 1;
   guint direction          : 1;
+  guint delay_past         : 1;
 
   gdouble last_progress;
+
+  GStaticMutex progress_mutex;
 };
 
 enum {
   PROP_0,
   PROP_FPS,
   PROP_DURATION,
+  PROP_DELAY,
   PROP_LOOP,
   PROP_DIRECTION,
   PROP_SCREEN
@@ -105,6 +110,15 @@ af_timeline_class_init (AfTimelineClass *class)
 				   g_param_spec_uint ("duration",
 						      "Animation Duration",
 						      "Animation Duration",
+						      0,
+						      G_MAXUINT,
+						      0,
+						      G_PARAM_READWRITE));
+   g_object_class_install_property (object_class,
+				   PROP_DELAY,
+				   g_param_spec_uint ("delay",
+						      "Animation Delay",
+						      "Animation Delay",
 						      0,
 						      G_MAXUINT,
 						      0,
@@ -181,10 +195,14 @@ af_timeline_init (AfTimeline *timeline)
 
   priv->fps = DEFAULT_FPS;
   priv->duration = 0.0;
+  priv->delay = 0.0;
   priv->direction = AF_TIMELINE_DIRECTION_FORWARD;
   priv->screen = gdk_screen_get_default ();
 
+  priv->delay_past = FALSE;
   priv->last_progress = 0;
+
+  g_static_mutex_init (&priv->progress_mutex);
 }
 
 static void
@@ -206,6 +224,9 @@ af_timeline_set_property (GObject      *object,
       break;
     case PROP_DURATION:
       af_timeline_set_duration (timeline, g_value_get_uint (value));
+      break;
+    case PROP_DELAY:
+      af_timeline_set_delay (timeline, g_value_get_uint (value));
       break;
     case PROP_LOOP:
       af_timeline_set_loop (timeline, g_value_get_boolean (value));
@@ -242,6 +263,9 @@ af_timeline_get_property (GObject    *object,
     case PROP_DURATION:
       g_value_set_uint (value, priv->duration);
       break;
+    case PROP_DELAY:
+      g_value_set_uint (value, priv->delay);
+      break;
     case PROP_LOOP:
       g_value_set_boolean (value, priv->loop);
       break;
@@ -272,6 +296,8 @@ af_timeline_finalize (GObject *object)
   if (priv->timer)
     g_timer_destroy (priv->timer);
 
+  g_static_mutex_free (&priv->progress_mutex);
+
   G_OBJECT_CLASS (af_timeline_parent_class)->finalize (object);
 }
 
@@ -290,6 +316,9 @@ af_timeline_run_frame (AfTimeline *timeline)
   if (priv->animations_enabled)
     {
       delta_progress = (gdouble) elapsed_time / priv->duration;
+
+      /* enter critical section */
+      g_static_mutex_lock (&priv->progress_mutex);
       progress = priv->last_progress;
 
       if (priv->direction == AF_TIMELINE_DIRECTION_BACKWARD)
@@ -298,6 +327,8 @@ af_timeline_run_frame (AfTimeline *timeline)
 	progress += delta_progress;
 
       priv->last_progress = progress;
+      g_static_mutex_unlock (&priv->progress_mutex);
+      /* leave critical section */
 
       progress = CLAMP (progress, 0., 1.);
     }
@@ -321,7 +352,16 @@ af_timeline_run_frame (AfTimeline *timeline)
 	  return FALSE;
 	}
       else
-	af_timeline_rewind (timeline);
+        {
+          /* reset timer */
+          if (priv->timer)
+            {
+              if (af_timeline_get_direction(timeline) != AF_TIMELINE_DIRECTION_FORWARD)
+      	        priv->last_progress = 1.0 + progress;
+              else
+	        priv->last_progress = progress - 1.0;
+	    }
+	}
     }
 
   return TRUE;
@@ -374,6 +414,69 @@ af_timeline_clone (AfTimeline *timeline)
 		       NULL);
 }
 
+void
+af_timeline_start_init (AfTimeline *timeline)
+{
+  AfTimelinePriv *priv;
+  GtkSettings *settings;
+  gboolean enable_animations = FALSE;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  if (priv->timer)
+    g_timer_continue (priv->timer);
+  else
+    priv->timer = g_timer_new ();
+
+  /* sanity check */
+  g_assert (priv->fps > 0);
+
+  if (priv->screen)
+    {
+      settings = gtk_settings_get_for_screen (priv->screen);
+      g_object_get (settings, "gtk-enable-animations", &enable_animations, NULL);
+    }
+
+  priv->animations_enabled = (enable_animations == TRUE);
+
+  g_signal_emit (timeline, signals [STARTED], 0);
+
+  if (enable_animations)
+    priv->source_id = gdk_threads_add_timeout (FRAME_INTERVAL (priv->fps),
+                                               (GSourceFunc) af_timeline_run_frame,
+                                               timeline);
+  else
+    priv->source_id = gdk_threads_add_idle ((GSourceFunc) af_timeline_run_frame,
+                                            timeline);
+}
+
+gboolean
+af_timeline_start_delay (AfTimeline *timeline)
+{
+  AfTimelinePriv *priv;
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  if (priv->source_id && priv->timer
+        && (g_timer_elapsed (priv->timer, NULL) * 1000) >= priv->delay)
+    {
+      priv->delay_past = TRUE;
+
+      g_timer_destroy (priv->timer);
+      priv->timer = NULL;
+
+      g_source_remove (priv->source_id);
+
+      af_timeline_start_init (timeline);
+
+      return FALSE;
+    }
+  else
+    return TRUE;
+}
+
 /**
  * af_timeline_start:
  * @timeline: A #AfTimeline
@@ -384,8 +487,6 @@ void
 af_timeline_start (AfTimeline *timeline)
 {
   AfTimelinePriv *priv;
-  GtkSettings *settings;
-  gboolean enable_animations = FALSE;
 
   g_return_if_fail (AF_IS_TIMELINE (timeline));
 
@@ -393,31 +494,20 @@ af_timeline_start (AfTimeline *timeline)
 
   if (!priv->source_id)
     {
-      if (priv->timer)
-        g_timer_continue (priv->timer);
-      else
-        priv->timer = g_timer_new ();
-
-      /* sanity check */
-      g_assert (priv->fps > 0);
-
-      if (priv->screen)
+      if (priv->delay > 0 && priv->delay_past == FALSE)
         {
-          settings = gtk_settings_get_for_screen (priv->screen);
-          g_object_get (settings, "gtk-enable-animations", &enable_animations, NULL);
-        }
-
-      priv->animations_enabled = (enable_animations == TRUE);
-
-      g_signal_emit (timeline, signals [STARTED], 0);
-
-      if (enable_animations)
-        priv->source_id = gdk_threads_add_timeout (FRAME_INTERVAL (priv->fps),
-                                                   (GSourceFunc) af_timeline_run_frame,
-                                                   timeline);
+	  if (!priv->timer)
+	    priv->timer = g_timer_new ();
+	  else
+	    g_timer_continue (priv->timer);
+            
+	  priv->source_id = gdk_threads_add_timeout ((priv->delay - g_timer_elapsed (priv->timer, NULL) * 1000),
+                                                     (GSourceFunc) af_timeline_start_delay,
+                                                     timeline);
+	}
       else
-        priv->source_id = gdk_threads_add_idle ((GSourceFunc) af_timeline_run_frame,
-                                                timeline);
+        af_timeline_start_init (timeline);      
+
     }
 }
 
@@ -438,7 +528,9 @@ af_timeline_pause (AfTimeline *timeline)
 
   if (priv->source_id)
     {
-      g_timer_stop (priv->timer);
+      if (priv->timer)
+        g_timer_stop (priv->timer);
+      
       g_source_remove (priv->source_id);
       priv->source_id = 0;
       g_signal_emit (timeline, signals [PAUSED], 0);
@@ -460,6 +552,8 @@ af_timeline_rewind (AfTimeline *timeline)
 
   priv = AF_TIMELINE_GET_PRIV (timeline);
 
+  priv->delay_past = FALSE;
+
   /* reset timer */
   if (priv->timer)
     {
@@ -472,6 +566,80 @@ af_timeline_rewind (AfTimeline *timeline)
       if (!priv->source_id)
         g_timer_stop (priv->timer);
     }
+}
+
+/**
+ * af_timeline_skip:
+ * @timeline: A #AfTimeline
+ *
+ * Skips the requested number of frames.
+ **/
+void
+af_timeline_skip (AfTimeline *timeline,
+		  guint       n_frames)
+{
+  AfTimelinePriv *priv;
+  gdouble skip_msec;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  skip_msec = ((gdouble) n_frames * 1000) / priv->fps / priv->duration;
+
+  /* enter critical section */
+  g_static_mutex_lock (&priv->progress_mutex);
+
+  if (priv->direction == AF_TIMELINE_DIRECTION_BACKWARD)
+    priv->last_progress -= skip_msec;
+  else
+    priv->last_progress += skip_msec;
+
+  g_static_mutex_unlock (&priv->progress_mutex);
+  /* leave critical section */
+}
+
+/**
+ * af_timeline_advance:
+ * @timeline: A #AfTimeline
+ *
+ * Advance timeline to the requested frame number.
+ **/
+void
+af_timeline_advance (AfTimeline *timeline,
+		     guint       frame_num)
+{
+  AfTimelinePriv *priv;
+  guint current_frame;
+  gint skip_frames;
+  gdouble skip_msec;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  /* enter critical section */
+  g_static_mutex_lock (&priv->progress_mutex);
+
+  current_frame = (priv->last_progress * priv->fps * priv->duration) / 1000;
+
+  if ((current_frame < frame_num && priv->direction == AF_TIMELINE_DIRECTION_FORWARD)
+      || (current_frame > frame_num && priv->direction == AF_TIMELINE_DIRECTION_BACKWARD))
+    {
+      /* substract 1 so the next handled frame is the one requested */
+      skip_frames = frame_num - current_frame;
+      skip_frames = ABS(skip_frames) - 1;
+
+      skip_msec = ((gdouble) skip_frames * 1000) / priv->fps / priv->duration;
+
+      if (priv->direction == AF_TIMELINE_DIRECTION_BACKWARD)
+        priv->last_progress -= skip_msec;
+      else
+        priv->last_progress += skip_msec;
+    }
+
+  g_static_mutex_unlock (&priv->progress_mutex);
+  /* leave critical section */
 }
 
 /**
@@ -612,6 +780,33 @@ af_timeline_get_duration (AfTimeline *timeline)
   priv = AF_TIMELINE_GET_PRIV (timeline);
 
   return priv->duration;
+}
+
+void
+af_timeline_set_delay (AfTimeline *timeline,
+                       guint       delay)
+{
+  AfTimelinePriv *priv;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  priv->delay = delay;
+
+  g_object_notify (G_OBJECT (timeline), "delay");
+}
+
+guint
+af_timeline_get_delay (AfTimeline *timeline)
+{
+  AfTimelinePriv *priv;
+
+  g_return_val_if_fail (AF_IS_TIMELINE (timeline), 0);
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  return priv->delay;
 }
 
 void
