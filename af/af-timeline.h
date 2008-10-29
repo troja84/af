@@ -71,11 +71,15 @@ AfTimeline           *af_timeline_clone              (AfTimeline              *t
 
 void                  af_timeline_start              (AfTimeline              *timeline);
 void                  af_timeline_pause              (AfTimeline              *timeline);
+void                  af_timeline_stop               (AfTimeline              *timeline);
 void                  af_timeline_rewind             (AfTimeline              *timeline);
 void                  af_timeline_skip               (AfTimeline              *timeline,
 		                                      guint                    n_frames);
 void                  af_timeline_advance            (AfTimeline              *timeline,
 		                                      guint                    frame_num);
+
+guint                 af_timeline_get_current_frame  (AfTimeline              *timeline);
+gdouble               af_timeline_get_progress       (AfTimeline              *timeline);
 
 gboolean              af_timeline_is_running         (AfTimeline              *timeline);
 

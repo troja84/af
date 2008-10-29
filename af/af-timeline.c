@@ -538,6 +538,32 @@ af_timeline_pause (AfTimeline *timeline)
 }
 
 /**
+ * af_timeline_stop:
+ * @timeline: A #AfTimeline
+ *
+ * Stopes the timeline and moves to frame 0.
+ **/
+void
+af_timeline_stop (AfTimeline *timeline)
+{
+  AfTimelinePriv *priv;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  if (priv->source_id)
+    {
+      if (priv->timer)
+        g_timer_stop (priv->timer);
+      
+      g_source_remove (priv->source_id);
+      priv->source_id = 0;
+    }
+
+  priv->last_progress = 0.0;
+}
+/**
  * af_timeline_rewind:
  * @timeline: A #AfTimeline
  *
@@ -642,6 +668,41 @@ af_timeline_advance (AfTimeline *timeline,
   /* leave critical section */
 }
 
+/**
+ * af_timeline_get_current_frame:
+ * @timeline: A #AfTimeline
+ *
+ * Request the current frame number of the timeline.
+ **/
+guint
+af_timeline_get_current_frame (AfTimeline *timeline)
+{
+  AfTimelinePriv *priv;
+
+  g_return_val_if_fail (AF_IS_TIMELINE (timeline), 0);
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  return (priv->last_progress * priv->fps * priv->duration) / 1000;
+}
+
+/**
+ * af_timeline_get_progress:
+ * @timeline: A #AfTimeline
+ *
+ * The position of the timeline in a [0, 1] interval.
+ **/
+gdouble
+af_timeline_get_progress (AfTimeline *timeline)
+{
+  AfTimelinePriv *priv;
+
+  g_return_val_if_fail (AF_IS_TIMELINE (timeline), 0);
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  return priv->last_progress;
+}
 /**
  * af_timeline_is_running:
  * @timeline: A #AfTimeline
