@@ -956,7 +956,7 @@ af_timeline_has_marker (AfTimeline  *timeline,
 
 gchar**
 af_timeline_list_markers (AfTimeline *timeline,
-		          gint        frame_num,
+		          gint        msec,
 			  gsize      *n_markers)
 {
   AfTimelinePriv *priv;
@@ -979,9 +979,9 @@ af_timeline_list_markers (AfTimeline *timeline,
   if (!element)
     return NULL;
 
-  if (frame_num > -1)
+  if (msec > -1)
     {
-      progress = ((gdouble) frame_num * 1000) / priv->fps / priv->duration;
+      progress = msec / priv->duration;
 
       element = g_list_find_custom (priv->marker_list, &progress,
 		                    marker_compare_name_with_progress);
@@ -1002,7 +1002,7 @@ af_timeline_list_markers (AfTimeline *timeline,
   
   list = g_new0 (gchar*, *n_markers + 1);
 
-  while (element && (index < *n_markers || frame_num == -1))
+  while (element && (index < *n_markers || msec == -1))
     {
       list[index++] = g_strdup (((Marker *)element->data)->name);
 
