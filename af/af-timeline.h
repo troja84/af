@@ -76,6 +76,10 @@ void                  af_timeline_start              (AfTimeline              *t
 void                  af_timeline_pause              (AfTimeline              *timeline);
 void                  af_timeline_stop               (AfTimeline              *timeline);
 void                  af_timeline_rewind             (AfTimeline              *timeline);
+void                  af_timeline_advance_to_progress (AfTimeline             *timeline,
+		                                       gdouble                 new_progress);
+void                  af_timeline_skip_to_msec       (AfTimeline              *timeline,
+		                                      guint                    msec);
 void                  af_timeline_skip               (AfTimeline              *timeline,
 		                                      guint                    n_frames);
 void                  af_timeline_advance            (AfTimeline              *timeline,

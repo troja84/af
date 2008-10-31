@@ -12,9 +12,10 @@ static GtkWidget *label, *combo_box = NULL;
 static AfTimeline *timeline = NULL;
 
 static gint length = 7;
-static guint frames[] = {5, 20, 15, 15, 25, 31, 0};
-static gchar *markers[] = {"Near start", "near middle", "middle", "smiddle",
-		           "far of", "not seen anymore", "not too early"};
+static guint msecs[] = {500, 2000, 150, 150, 2500, 310, 0};
+static gchar *markers[] = {"Near middle", "near end", "near start", 
+			   "also near start", "far of", "middle start", 
+			   "the real start"};
 
 
 static AfTimeline *
@@ -30,7 +31,7 @@ init_timeline (AfTimeline *timeline,
 
   for (x=0; x < size; x++)
     {
-      af_timeline_add_marker_at_frame (timeline, markers[x], frames[x]);
+      af_timeline_add_marker_at_time (timeline, markers[x], msecs[x]);
     }
 
   return timeline;
@@ -74,7 +75,7 @@ anim_cb (AfTimeline   *timeline,
          gpointer     user_data)
 {
   printf ("YEAH!!!! %f -> %s\n", 
-	  (progress * DURATION / 1000 * 30), marker_name);
+	  progress * DURATION, marker_name);
 }
 
 static void
@@ -82,7 +83,7 @@ play_cb (GtkButton *button,
          gpointer   user_data)
 {
   if (!timeline)
-    init_timeline (timeline, 4000, frames, markers, length);
+    init_timeline (timeline, 4000, msecs, markers, length);
 
   af_timeline_set_loop (timeline, TRUE);
 
@@ -97,7 +98,7 @@ play_delay_cb (GtkButton *button,
                gpointer   user_data)
 {
   if (!timeline)
-    init_timeline (timeline, 4000, frames, markers, length);
+    init_timeline (timeline, 4000, msecs, markers, length);
 
   af_timeline_set_delay (timeline, DELAY);
     
@@ -218,7 +219,7 @@ main (int argc, char *argv[])
   gtk_box_pack_end (GTK_BOX (box), bbox, FALSE, FALSE, 0);
 
   /* COMBOX BOX */
-  timeline = init_timeline (timeline, DURATION, frames, markers, length);
+  timeline = init_timeline (timeline, DURATION, msecs, markers, length);
 
   combo_box = gtk_combo_box_new_text ();
 

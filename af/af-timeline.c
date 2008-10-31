@@ -675,6 +675,60 @@ af_timeline_rewind (AfTimeline *timeline)
     }
 }
 
+void
+af_timeline_advance_to_progress (AfTimeline *timeline,
+		                 gdouble     new_progress)
+{
+  AfTimelinePriv *priv;
+  gdouble delta_progress;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  if ((priv->direction == AF_TIMELINE_DIRECTION_FORWARD &&
+      priv->last_progress >= new_progress) || 
+      (priv->direction == AF_TIMELINE_DIRECTION_BACKWARD &&
+      priv->last_progress <= new_progress))
+    return;
+
+  delta_progress = 1 / priv->fps / priv->duration;
+
+  /* enter critical section */
+  g_static_mutex_lock (&priv->progress_mutex);
+
+  /* substract 1 so the next handled frame is the one requested */
+  if (priv->direction == AF_TIMELINE_DIRECTION_FORWARD)
+    priv->last_progress = new_progress - delta_progress;
+  else
+    priv->last_progress  = new_progress + delta_progress;
+      
+  marker_skip_progress (timeline, priv->last_progress);
+
+  g_static_mutex_unlock (&priv->progress_mutex);
+  /* leave critical section */
+
+}
+
+void
+af_timeline_skip_to_msec (AfTimeline *timeline,
+		          guint       msec)
+{
+  AfTimelinePriv *priv;
+  gdouble new_progress;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  if (priv->direction == AF_TIMELINE_DIRECTION_FORWARD)
+    new_progress = priv->last_progress + msec / priv->duration;
+  else
+    new_progress = priv->last_progress - msec / priv->duration;
+      
+
+  af_timeline_advance_to_progress (timeline, new_progress);
+}
 /**
  * af_timeline_skip:
  * @timeline: A #AfTimeline
@@ -866,15 +920,15 @@ af_timeline_add_marker_at_time (AfTimeline  *timeline,
 			        guint        msec)
 {
   AfTimelinePriv *priv;
-  guint frame_num;
+  gdouble progress;
 
   g_return_if_fail (AF_IS_TIMELINE (timeline));
 
   priv = AF_TIMELINE_GET_PRIV (timeline);
 
-  frame_num = (gdouble) msec * 1000 * priv->fps;
+  progress = (gdouble) msec / priv->duration;
 
-  af_timeline_add_marker_at_frame (timeline, marker_name, frame_num);
+  af_timeline_add_marker_impl (timeline, marker_name, progress);
 }
 
 /**
@@ -998,7 +1052,6 @@ af_timeline_advance_to_marker (AfTimeline  *timeline,
 {
   AfTimelinePriv *priv;
   GList *element;
-  guint frame_num;
 
   element = NULL;
 
@@ -1012,9 +1065,7 @@ af_timeline_advance_to_marker (AfTimeline  *timeline,
   if (!element)
     return;
 
-  frame_num = ((Marker *)element->data)->progress * priv->duration * 1000 * priv->fps;
-
-  af_timeline_advance (timeline, frame_num);
+  af_timeline_advance_to_progress (timeline, ((Marker *)element->data)->progress);
 }
 
 /* Marker API End */
