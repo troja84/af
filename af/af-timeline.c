@@ -23,6 +23,7 @@
 #include <glib-object.h>
 #include <math.h>
 #include "af-timeline.h"
+#include "af-marshaller.h"
 
 #define AF_TIMELINE_GET_PRIV(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), AF_TYPE_TIMELINE, AfTimelinePriv))
 #define MSECS_PER_SEC 1000
@@ -30,6 +31,7 @@
 #define DEFAULT_FPS 30
 
 typedef struct AfTimelinePriv AfTimelinePriv;
+typedef struct Marker Marker;
 
 struct AfTimelinePriv
 {
@@ -49,8 +51,42 @@ struct AfTimelinePriv
 
   gdouble last_progress;
 
+  GList *marker_list;
+  GList *marker_position;
+
   GStaticMutex progress_mutex;
 };
+
+struct Marker
+{
+  gdouble progress;
+  gchar *name;
+};
+
+/* Marker helper functions - START */
+static void marker_emit_signals (AfTimeline *timeline,
+		                 gdouble    new_progress);
+
+static void marker_skip_progress (AfTimeline *timeline,
+		                  gdouble     progress);
+
+static gint marker_compare_progress (gconstpointer a,
+		                     gconstpointer b);
+
+static gint marker_compare_name_with_progress (gconstpointer a,
+		                               gconstpointer b);
+
+/*
+static gint marker_compare_name (gconstpointer a,
+		                 gconstpointer b);
+*/
+
+static gint marker_compare_name_with_string (gconstpointer a,
+		                             gconstpointer b);
+
+static void marker_free (gpointer data,
+		         gpointer user_data);
+/* END */
 
 enum {
   PROP_0,
@@ -67,6 +103,7 @@ enum {
   PAUSED,
   FINISHED,
   FRAME,
+  MARKER,
   LAST_SIGNAL
 };
 
@@ -183,6 +220,17 @@ af_timeline_class_init (AfTimelineClass *class)
 		  G_TYPE_NONE, 1,
 		  G_TYPE_DOUBLE);
 
+  signals[MARKER] =
+    g_signal_new ("marker",
+		  G_TYPE_FROM_CLASS (object_class),
+		  G_SIGNAL_RUN_LAST,
+		  G_STRUCT_OFFSET (AfTimelineClass, marker),
+		  NULL, NULL,
+		  g_cclosure_user_marshal_VOID__DOUBLE_STRING,
+		  G_TYPE_NONE, 2,
+		  G_TYPE_DOUBLE,
+		  G_TYPE_STRING);
+
   g_type_class_add_private (class, sizeof (AfTimelinePriv));
 }
 
@@ -200,7 +248,11 @@ af_timeline_init (AfTimeline *timeline)
   priv->screen = gdk_screen_get_default ();
 
   priv->delay_past = FALSE;
+  
   priv->last_progress = 0;
+
+  priv->marker_list = NULL;
+  priv->marker_position = NULL;
 
   g_static_mutex_init (&priv->progress_mutex);
 }
@@ -296,6 +348,13 @@ af_timeline_finalize (GObject *object)
   if (priv->timer)
     g_timer_destroy (priv->timer);
 
+  if (priv->marker_list)
+    {
+      g_list_foreach (priv->marker_list, &marker_free, NULL);
+      g_list_free (priv->marker_list);
+    }
+  g_list_free (priv->marker_position);
+
   g_static_mutex_free (&priv->progress_mutex);
 
   G_OBJECT_CLASS (af_timeline_parent_class)->finalize (object);
@@ -337,6 +396,8 @@ af_timeline_run_frame (AfTimeline *timeline)
 
   g_signal_emit (timeline, signals [FRAME], 0, progress);
 
+  marker_emit_signals (timeline, progress);
+
   if ((priv->direction == AF_TIMELINE_DIRECTION_FORWARD && progress >= 1.0) ||
       (priv->direction == AF_TIMELINE_DIRECTION_BACKWARD && progress <= 0.0))
     {
@@ -357,9 +418,17 @@ af_timeline_run_frame (AfTimeline *timeline)
           if (priv->timer)
             {
               if (af_timeline_get_direction(timeline) != AF_TIMELINE_DIRECTION_FORWARD)
-      	        priv->last_progress = 1.0 + progress;
+	        {
+      	          priv->last_progress = 1.0 + progress;
+
+		  priv->marker_position = g_list_last (priv->marker_list);
+		}
               else
-	        priv->last_progress = progress - 1.0;
+	        {
+	          priv->last_progress = progress - 1.0;
+		  
+		  priv->marker_position = priv->marker_list;
+		}
 	    }
 	}
     }
@@ -428,7 +497,11 @@ af_timeline_start_init (AfTimeline *timeline)
   if (priv->timer)
     g_timer_continue (priv->timer);
   else
-    priv->timer = g_timer_new ();
+    {
+      priv->timer = g_timer_new ();
+
+      priv->marker_position = priv->marker_list;
+    }
 
   /* sanity check */
   g_assert (priv->fps > 0);
@@ -584,9 +657,17 @@ af_timeline_rewind (AfTimeline *timeline)
   if (priv->timer)
     {
       if (af_timeline_get_direction(timeline) != AF_TIMELINE_DIRECTION_FORWARD)
-      	priv->last_progress = 1.0;
+        {
+      	  priv->last_progress = 1.0;
+
+	  priv->marker_position = g_list_last (priv->marker_list);
+	}
       else
-	priv->last_progress = 0;
+        {
+	  priv->last_progress = 0;
+
+	  priv->marker_position = priv->marker_list;
+	}
 
       g_timer_start (priv->timer);
       if (!priv->source_id)
@@ -620,6 +701,8 @@ af_timeline_skip (AfTimeline *timeline,
     priv->last_progress -= skip_msec;
   else
     priv->last_progress += skip_msec;
+      
+  marker_skip_progress (timeline, priv->last_progress);
 
   g_static_mutex_unlock (&priv->progress_mutex);
   /* leave critical section */
@@ -638,7 +721,7 @@ af_timeline_advance (AfTimeline *timeline,
   AfTimelinePriv *priv;
   guint current_frame;
   gint skip_frames;
-  gdouble skip_msec;
+  gdouble skip_fraction;
 
   g_return_if_fail (AF_IS_TIMELINE (timeline));
 
@@ -656,12 +739,14 @@ af_timeline_advance (AfTimeline *timeline,
       skip_frames = frame_num - current_frame;
       skip_frames = ABS(skip_frames) - 1;
 
-      skip_msec = ((gdouble) skip_frames * 1000) / priv->fps / priv->duration;
+      skip_fraction = ((gdouble) skip_frames * 1000) / priv->fps / priv->duration;
 
       if (priv->direction == AF_TIMELINE_DIRECTION_BACKWARD)
-        priv->last_progress -= skip_msec;
+        priv->last_progress -= skip_fraction;
       else
-        priv->last_progress += skip_msec;
+        priv->last_progress += skip_fraction;
+
+      marker_skip_progress (timeline, priv->last_progress);
     }
 
   g_static_mutex_unlock (&priv->progress_mutex);
@@ -722,6 +807,217 @@ af_timeline_is_running (AfTimeline *timeline)
 
   return (priv->source_id != 0);
 }
+
+/* Marker API Start */
+
+static void
+af_timeline_add_marker_impl (AfTimeline  *timeline,
+		             const gchar *marker_name,
+			     gdouble      progress)
+{
+  AfTimelinePriv *priv;
+  Marker *marker;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  marker = g_new (Marker, 1);
+
+  marker->name = g_strdup (marker_name);
+  marker->progress = progress;
+
+  priv->marker_list = g_list_insert_sorted (priv->marker_list, marker, 
+		                            marker_compare_progress);
+}
+
+/**
+ * af_timeline_add_marker_at_frame:
+ * @timeline: A #AfTimeline
+ *
+ * 
+ **/
+void
+af_timeline_add_marker_at_frame (AfTimeline  *timeline,
+		                 const gchar *marker_name,
+				 guint       frame_num)
+{
+  AfTimelinePriv *priv;
+  gdouble progress;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  progress =  ((gdouble) frame_num * 1000) / priv->fps / priv->duration;
+
+  af_timeline_add_marker_impl (timeline, marker_name, progress);
+}
+
+/**
+ * af_timeline_add_marker_at_time:
+ * @timeline: A #AfTimeline
+ *
+ * 
+ **/
+void
+af_timeline_add_marker_at_time (AfTimeline  *timeline,
+		                const gchar *marker_name,
+			        guint        msec)
+{
+  AfTimelinePriv *priv;
+  guint frame_num;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  frame_num = (gdouble) msec * 1000 * priv->fps;
+
+  af_timeline_add_marker_at_frame (timeline, marker_name, frame_num);
+}
+
+/**
+ * af_timeline_has_marker:
+ * @timeline: A #AfTimeline
+ *
+ * 
+ **/
+gboolean
+af_timeline_has_marker (AfTimeline  *timeline,
+		        const gchar *marker_name)
+{
+  AfTimelinePriv *priv;
+
+  g_return_val_if_fail (AF_IS_TIMELINE (timeline), FALSE);
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  if (g_list_find_custom (priv->marker_list, marker_name, 
+			  marker_compare_name_with_string))
+    return TRUE;
+
+  return FALSE;
+}
+
+gchar**
+af_timeline_list_markers (AfTimeline *timeline,
+		          gint        frame_num,
+			  gsize      *n_markers)
+{
+  AfTimelinePriv *priv;
+  GList *element, *iterator;
+  gdouble progress;
+  gchar** list;
+  gint index;
+
+  *n_markers = 0;
+  progress = 0;
+  index = 0;
+  list = NULL;
+
+  g_return_val_if_fail (AF_IS_TIMELINE (timeline), NULL);
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  element = priv->marker_list;
+
+  if (!element)
+    return NULL;
+
+  if (frame_num > -1)
+    {
+      progress = ((gdouble) frame_num * 1000) / priv->fps / priv->duration;
+
+      element = g_list_find_custom (priv->marker_list, &progress,
+		                    marker_compare_name_with_progress);
+
+      if (!element)
+        return NULL;
+
+      iterator = element;
+
+      while (iterator && (((Marker *)iterator->data)->progress == progress))
+        {
+          *n_markers += 1;
+          iterator = g_list_next (iterator);
+	}
+    }
+  else
+    *n_markers = g_list_length (element);
+  
+  list = g_new0 (gchar*, *n_markers + 1);
+
+  while (element && (index < *n_markers || frame_num == -1))
+    {
+      list[index++] = g_strdup (((Marker *)element->data)->name);
+
+      element = g_list_next (element);
+    }
+
+  return list;
+}
+
+void
+af_timeline_remove_marker (AfTimeline  *timeline,
+		           const gchar *marker_name)
+{
+  AfTimelinePriv *priv;
+  GList *element;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  if (!priv->marker_list)
+    return;
+
+  element = g_list_find_custom (priv->marker_list, marker_name, 
+			        marker_compare_name_with_string);
+
+  if (!element)
+    return;
+
+  priv->marker_list = g_list_remove_link (priv->marker_list, element);
+
+  g_free (((Marker *)element->data)->name);
+  g_free ((Marker *)element->data);
+  
+  g_list_free (element);
+}
+
+/**
+ * af_timeline_advance_to_marker:
+ * @timeline: A #AfTimeline
+ *
+ * 
+ **/
+void
+af_timeline_advance_to_marker (AfTimeline  *timeline,
+		               const gchar *marker_name)
+{
+  AfTimelinePriv *priv;
+  GList *element;
+  guint frame_num;
+
+  element = NULL;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  element = g_list_find_custom (priv->marker_list, marker_name, 
+			        marker_compare_name_with_string);
+
+  if (!element)
+    return;
+
+  frame_num = ((Marker *)element->data)->progress * priv->duration * 1000 * priv->fps;
+
+  af_timeline_advance (timeline, frame_num);
+}
+
+/* Marker API End */
 
 /**
  * af_timeline_get_fps:
@@ -998,4 +1294,133 @@ af_timeline_calculate_progress (gdouble                linear_progress,
     }
 
   return progress;
+}
+
+/* Marker help functions */
+static void
+marker_emit_signals (AfTimeline *timeline,
+		     gdouble     new_progress)
+{
+  AfTimelinePriv *priv;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  if (priv->marker_position)
+    {
+      if (priv->direction == AF_TIMELINE_DIRECTION_FORWARD)
+	{
+          while (priv->marker_position && 
+		 ((Marker *)priv->marker_position->data)->progress 
+		 <= new_progress)
+	    {
+              g_signal_emit (timeline, signals [MARKER], 0, new_progress, 
+			     ((Marker *)priv->marker_position->data)->name);
+	      priv->marker_position = g_list_next (priv->marker_position);
+	    }
+	}
+      else
+	{
+          while (priv->marker_position && 
+	         ((Marker *)priv->marker_position->data)->progress 
+		 >= new_progress)
+	    {
+              g_signal_emit (timeline, signals [MARKER], 0, new_progress, 
+			     ((Marker *)priv->marker_position->data)->name);
+	      priv->marker_position = g_list_previous (priv->marker_position);
+	    }
+	}
+    }
+}
+
+static void
+marker_skip_progress (AfTimeline *timeline,
+		      gdouble     progress)
+{
+  AfTimelinePriv *priv;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  if (priv->marker_position)
+    {
+      if (priv->direction == AF_TIMELINE_DIRECTION_FORWARD)
+	{
+          while (priv->marker_position && 
+		 ((Marker *)priv->marker_position->data)->progress 
+		 <= progress)
+            priv->marker_position = g_list_next (priv->marker_position);
+	}
+      else
+	{
+          while (priv->marker_position && 
+	         ((Marker *)priv->marker_position->data)->progress 
+		 >= progress)
+            priv->marker_position = g_list_previous (priv->marker_position);
+	}
+    }
+}
+
+static gint 
+marker_compare_progress (gconstpointer a,
+		         gconstpointer b)
+{
+  gdouble difference;
+ 
+  difference = ((Marker *)a)->progress - ((Marker *)b)->progress;
+  
+  if (difference == 0)
+    return 0;
+
+  if (difference < 0)
+    return -1;
+
+  return 1; 
+}
+
+static gint
+marker_compare_name_with_progress (gconstpointer a,
+		                   gconstpointer b)
+{
+  gdouble difference;
+ 
+  difference = ((Marker *)a)->progress - *((const gdouble *)b);
+  
+  if (difference == 0)
+    return 0;
+
+  if (difference < 0)
+    return -1;
+
+  return 1; 
+}
+
+/*
+static gint 
+marker_compare_name (gconstpointer a,
+		     gconstpointer b)
+{
+  return g_strcmp0 (((Marker *)a)->name, ((Marker *)b)->name);
+}
+*/
+
+static gint
+marker_compare_name_with_string (gconstpointer a,
+		                 gconstpointer b)
+{
+  return g_strcmp0 (((Marker *)a)->name, (const gchar *)b);
+}
+
+static void
+marker_free (gpointer data,
+	     gpointer user_data)
+{
+  Marker *marker;
+
+  marker = (Marker *)data;
+
+  g_free (marker->name);
+  g_free (marker);
 }

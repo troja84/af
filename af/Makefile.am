@@ -14,7 +14,8 @@ lib_LTLIBRARIES= libanimation-framework-1.la
 afinclude_HEADERS = \
 	af-animator.h \
 	af-enums.h \
-	af-timeline.h
+	af-timeline.h \
+	af-marshaller.h
 
 libanimation_framework_1_la_SOURCES = \
 	$(BUILT_SOURCES) \
@@ -22,7 +23,9 @@ libanimation_framework_1_la_SOURCES = \
 	af-animator.h \
 	af-enums.h \
 	af-timeline.c \
-	af-timeline.h
+	af-timeline.h \
+	af-marshaller.c \
+	af-marshaller.h
 
 libanimation_framework_1_la_LIBADD = $(AF_LIBS)
 libanimation_framework_1_la_LDFLAGS = $(libtool_opts)

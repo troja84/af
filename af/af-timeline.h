@@ -52,6 +52,9 @@ struct AfTimelineClass
 
   void (* frame)             (AfTimeline *timeline,
 			      gdouble     progress);
+  void (* marker)            (AfTimeline *timeline,
+			      gdouble     progress,
+			      gchar      *marker_name);
 
   void (* __gtk_reserved1) (void);
   void (* __gtk_reserved2) (void);
@@ -82,6 +85,20 @@ guint                 af_timeline_get_current_frame  (AfTimeline              *t
 gdouble               af_timeline_get_progress       (AfTimeline              *timeline);
 
 gboolean              af_timeline_is_running         (AfTimeline              *timeline);
+
+void                  af_timeline_add_marker_at_frame (AfTimeline             *timeline,
+		                                       const gchar            *marker_name,
+				                       guint                   frame_num);
+void                  af_timeline_add_marker_at_time  (AfTimeline             *timeline,
+		                                       const gchar            *marker_name,
+			                               guint                   msec);
+gboolean              af_timeline_has_marker          (AfTimeline             *timeline,
+		                                       const gchar            *marker_name);
+gchar**               af_timeline_list_markers        (AfTimeline             *timeline,
+		                                       gint                    frame_num,
+			                               gsize                  *n_markers);
+void                  af_timeline_remove_marker       (AfTimeline             *timeline,
+		                                       const gchar            *marker_name);
 
 guint                 af_timeline_get_fps            (AfTimeline              *timeline);
 void                  af_timeline_set_fps            (AfTimeline              *timeline,
