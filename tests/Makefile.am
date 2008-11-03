@@ -7,6 +7,7 @@ LDADDS = \
 	$(AF_LIBS)
 
 noinst_PROGRAMS = \
+	test-graph\
 	test-timeline-marker \
 	test-anim-control \
 	test-chained-transitions \
@@ -41,6 +42,11 @@ test_timeline_marker_SOURCES = \
 	test-timeline-marker.c
 
 test_timeline_marker_LDADD = $(LDADDS)
+
+test_graph_SOURCES = \
+	test-graph.c
+
+test_graph_LDADD = $(LDADDS)
 
 test_chained_transitions_SOURCES = \
 	test-chained-transitions.c

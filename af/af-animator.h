@@ -66,18 +66,15 @@ gboolean af_animator_add_child_transition        (guint                   anim_i
 
 gboolean af_animator_start                       (guint         id,
                                                   guint         duration);
-gboolean af_animator_start_delay                 (guint         id,
-                                                  guint         duration,
-						  guint         delay);
 
 void     af_animator_remove                      (guint         id);
 void     af_animator_pause                       (guint         id);
 void     af_animator_resume                      (guint         id);
 void     af_animator_reverse                     (guint         id);
 void     af_animator_skip                        (guint         id,
-		                                  guint         n_frames);
+		                                  gdouble       delta_progress);
 void     af_animator_advance                     (guint         id,
-		                                  guint         frame_num);
+		                                  gdouble       progress);
 
 void     af_animator_set_loop                    (guint         id,
                                                   gboolean      loop);
@@ -87,20 +84,9 @@ guint    af_animator_tween                       (GObject                *object
                                                   guint                   duration,
                                                   AfTimelineProgressType  type,
                                                   ...);
-guint    af_animator_tween_delay                 (GObject                *object,
-                                                  guint                   duration,
-                                                  guint                   delay,
-                                                  AfTimelineProgressType  type,
-                                                  ...);
 guint    af_animator_child_tween                 (GtkContainer           *container,
                                                   GtkWidget              *child,
                                                   guint                   duration,
-                                                  AfTimelineProgressType  type,
-                                                  ...);
-guint    af_animator_child_tween_delay           (GtkContainer           *container,
-                                                  GtkWidget              *child,
-                                                  guint                   duration,
-                                                  guint                   delay,
                                                   AfTimelineProgressType  type,
                                                   ...);
 

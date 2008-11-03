@@ -26,28 +26,6 @@ play_cb (GtkButton *button,
 }
 
 static void
-play_delay_cb (GtkButton *button,
-               gpointer   user_data)
-{
-  if (id == 0)
-    {
-      g_object_set (label,
-                "xalign", 0.0,
-                NULL);
-
-      id = af_animator_tween_delay (G_OBJECT (label),
-                                    3000,
-				    3000, 
-				    AF_TIMELINE_PROGRESS_LINEAR,
-				    "xalign", 1.0,
-				    NULL);
-      af_animator_set_loop (id, TRUE);
-    }
-  else
-    af_animator_resume (id);
-}
-
-static void
 pause_cb (GtkButton *button,
           gpointer   user_data)
 {
@@ -79,7 +57,7 @@ skip_cb (GtkButton *button,
          gpointer   user_data)
 {
   if (id != 0)
-    af_animator_skip (id, 21);
+    af_animator_skip (id, (gdouble) 500 / 3000);
 }
 
 static void
@@ -87,7 +65,7 @@ advance_cb (GtkButton *button,
             gpointer   user_data)
 {
   if (id != 0)
-    af_animator_advance (id, 45);
+    af_animator_advance (id, (gdouble) 1200 / 3000);
 }
 
 int
@@ -143,11 +121,6 @@ main (int argc, char *argv[])
   gtk_box_pack_start (GTK_BOX (bbox), button, FALSE, FALSE, 0);
   g_signal_connect (button, "clicked",
                     G_CALLBACK (advance_cb), NULL);
-
-  button = gtk_button_new_from_stock (GTK_STOCK_REFRESH);
-  gtk_box_pack_start (GTK_BOX (bbox), button, FALSE, FALSE, 0);
-  g_signal_connect (button, "clicked",
-                    G_CALLBACK (play_delay_cb), NULL);
 
   gtk_box_pack_end (GTK_BOX (box), bbox, FALSE, FALSE, 0);
 

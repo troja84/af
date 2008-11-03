@@ -76,31 +76,22 @@ void                  af_timeline_start              (AfTimeline              *t
 void                  af_timeline_pause              (AfTimeline              *timeline);
 void                  af_timeline_stop               (AfTimeline              *timeline);
 void                  af_timeline_rewind             (AfTimeline              *timeline);
-void                  af_timeline_advance_to_progress (AfTimeline             *timeline,
-		                                       gdouble                 new_progress);
-void                  af_timeline_skip_to_msec       (AfTimeline              *timeline,
-		                                      guint                    msec);
+void                  af_timeline_advance            (AfTimeline             *timeline,
+		                                      gdouble                 new_progress);
 void                  af_timeline_skip               (AfTimeline              *timeline,
-		                                      guint                    n_frames);
-void                  af_timeline_advance            (AfTimeline              *timeline,
-		                                      guint                    frame_num);
+		                                      gdouble                  delta_progress);
 
-guint                 af_timeline_get_current_frame  (AfTimeline              *timeline);
 gdouble               af_timeline_get_progress       (AfTimeline              *timeline);
 
 gboolean              af_timeline_is_running         (AfTimeline              *timeline);
 
-void                  af_timeline_add_marker_at_frame (AfTimeline             *timeline,
-		                                       const gchar            *marker_name,
-				                       guint                   frame_num);
-void                  af_timeline_add_marker_at_time  (AfTimeline             *timeline,
-		                                       const gchar            *marker_name,
-			                               guint                   msec);
+void                  af_timeline_add_marker         (AfTimeline             *timeline,
+		                                      const gchar            *marker_name,
+				                      gdouble                 progress);
 gboolean              af_timeline_has_marker          (AfTimeline             *timeline,
 		                                       const gchar            *marker_name);
 gchar**               af_timeline_list_markers        (AfTimeline             *timeline,
-		                                       gint                    frame_num,
-			                               gsize                  *n_markers);
+		                                       gdouble                 progress);
 void                  af_timeline_remove_marker       (AfTimeline             *timeline,
 		                                       const gchar            *marker_name);
 void                  af_timeline_advance_to_marker   (AfTimeline             *timeline,
@@ -117,14 +108,6 @@ void                  af_timeline_set_loop           (AfTimeline              *t
 guint                 af_timeline_get_duration       (AfTimeline              *timeline);
 void                  af_timeline_set_duration       (AfTimeline              *timeline,
                                                       guint                    duration);
-
-guint                 af_timeline_get_delay          (AfTimeline              *timeline);
-void                  af_timeline_set_delay          (AfTimeline              *timeline,
-                                                      guint                    delay);
-
-guint                 af_timeline_get_n_frames       (AfTimeline              *timeline);
-void                  af_timeline_set_n_frames       (AfTimeline              *timeline,
-                                                      guint                    n_frames);
 
 GdkScreen            *af_timeline_get_screen         (AfTimeline              *timeline);
 void                  af_timeline_set_screen         (AfTimeline              *timeline,

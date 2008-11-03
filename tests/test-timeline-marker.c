@@ -3,9 +3,8 @@
 #include <af/af-timeline.h>
 
 #define DURATION 3000
-#define DELAY    3000
-#define SKIP     (DURATION * (1/3))
-#define ADVANCE  (DURATION / 2)
+#define SKIP     ((DURATION * (1/3)) / DURATION)
+#define ADVANCE  ((DURATION / 2) / DURATION)
 
 static GtkWidget *label, *combo_box = NULL;
 
@@ -31,7 +30,7 @@ init_timeline (AfTimeline *timeline,
 
   for (x=0; x < size; x++)
     {
-      af_timeline_add_marker_at_time (timeline, markers[x], msecs[x]);
+      af_timeline_add_marker (timeline, markers[x], ((gdouble) msecs[x] / DURATION));
     }
 
   return timeline;
@@ -48,7 +47,9 @@ init_gtk_combo_box_text (AfTimeline *timeline,
 
   g_assert (timeline);
 
-  list = af_timeline_list_markers (timeline, -1, &size);
+  list = af_timeline_list_markers (timeline, -1);
+
+  size = g_strv_length (list);
 
   for (y = 0; y < size; y++)
     {
@@ -82,24 +83,12 @@ play_cb (GtkButton *button,
          gpointer   user_data)
 {
   if (!timeline)
-    init_timeline (timeline, 4000, msecs, markers, length);
+    init_timeline (timeline, DURATION, msecs, markers, length);
 
   af_timeline_set_loop (timeline, TRUE);
 
   g_signal_connect (timeline, "marker",
 		    G_CALLBACK (anim_cb), label);
-    
-  af_timeline_start (timeline);
-}
-
-static void
-play_delay_cb (GtkButton *button,
-               gpointer   user_data)
-{
-  if (!timeline)
-    init_timeline (timeline, 4000, msecs, markers, length);
-
-  af_timeline_set_delay (timeline, DELAY);
     
   af_timeline_start (timeline);
 }
@@ -152,8 +141,14 @@ static void
 advance_cb (GtkButton *button,
             gpointer   user_data)
 {
-  if (timeline)
-    af_timeline_advance (timeline, ADVANCE);
+  gchar *marker;
+
+  if (timeline && 
+      (marker = gtk_combo_box_get_active_text (GTK_COMBO_BOX (combo_box))))
+    {
+      af_timeline_advance_to_marker (timeline, marker);
+      g_free (marker);
+    }
 }
 
 int
@@ -209,11 +204,6 @@ main (int argc, char *argv[])
   gtk_box_pack_start (GTK_BOX (bbox), button, FALSE, FALSE, 0);
   g_signal_connect (button, "clicked",
                     G_CALLBACK (advance_cb), NULL);
-
-  button = gtk_button_new_from_stock (GTK_STOCK_REFRESH);
-  gtk_box_pack_start (GTK_BOX (bbox), button, FALSE, FALSE, 0);
-  g_signal_connect (button, "clicked",
-                    G_CALLBACK (play_delay_cb), NULL);
 
   gtk_box_pack_end (GTK_BOX (box), bbox, FALSE, FALSE, 0);
 
