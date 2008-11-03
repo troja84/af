@@ -23,7 +23,6 @@
 #include <glib-object.h>
 #include <math.h>
 #include "af-timeline.h"
-#include "af-marshaller.h"
 
 #define AF_TIMELINE_GET_PRIV(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), AF_TYPE_TIMELINE, AfTimelinePriv))
 #define MSECS_PER_SEC 1000
@@ -428,15 +427,6 @@ af_timeline_new (guint duration)
 {
   return g_object_new (AF_TYPE_TIMELINE,
 		       "duration", duration,
-		       NULL);
-}
-
-AfTimeline *
-af_timeline_new_n_frames (guint n_frames,
-		 	  guint fps)
-{
-  return g_object_new (AF_TYPE_TIMELINE,
-		       "duration", ((gdouble) (n_frames * 1000) / fps),
 		       NULL);
 }
 

@@ -44,6 +44,8 @@ test_timeline_marker_SOURCES = \
 test_timeline_marker_LDADD = $(LDADDS)
 
 test_graph_SOURCES = \
+        mychart.c \
+	mychart.h \
 	test-graph.c
 
 test_graph_LDADD = $(LDADDS)

@@ -66,8 +66,6 @@ struct AfTimelineClass
 GType                 af_timeline_get_type           (void) G_GNUC_CONST;
 
 AfTimeline           *af_timeline_new                (guint                    duration);
-AfTimeline           *af_timeline_new_n_frames       (guint                    n_frames,
-						      guint                    fps);
 AfTimeline           *af_timeline_new_for_screen     (guint                    duration,
                                                       GdkScreen               *screen);
 AfTimeline           *af_timeline_clone              (AfTimeline              *timeline);
