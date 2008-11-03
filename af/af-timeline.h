@@ -103,6 +103,8 @@ gchar**               af_timeline_list_markers        (AfTimeline             *t
 			                               gsize                  *n_markers);
 void                  af_timeline_remove_marker       (AfTimeline             *timeline,
 		                                       const gchar            *marker_name);
+void                  af_timeline_advance_to_marker   (AfTimeline             *timeline,
+		                                       const gchar            *marker_name);
 
 guint                 af_timeline_get_fps            (AfTimeline              *timeline);
 void                  af_timeline_set_fps            (AfTimeline              *timeline,

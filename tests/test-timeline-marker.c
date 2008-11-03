@@ -74,9 +74,6 @@ anim_cb (AfTimeline   *timeline,
 	 const gchar* marker_name,
          gpointer     user_data)
 {
-  printf ("YEAH!!!! %f -> %s\n", 
-	  progress * DURATION, marker_name);
-
   gtk_label_set_label (GTK_LABEL (label), marker_name);
 }
 
