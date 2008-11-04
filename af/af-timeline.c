@@ -710,7 +710,7 @@ af_timeline_add_marker (AfTimeline  *timeline,
 
   priv = AF_TIMELINE_GET_PRIV (timeline);
 
-  marker = g_new (AfMarker, 1);
+  marker = g_slice_new (AfMarker);
 
   marker->name = g_strdup (marker_name);
   marker->progress = progress;
@@ -837,9 +837,8 @@ af_timeline_remove_marker (AfTimeline  *timeline,
 
   priv->marker_list = g_list_remove_link (priv->marker_list, element);
 
-  g_free (((AfMarker *)element->data)->name);
-  g_free ((AfMarker *)element->data);
-  
+  marker_free (element->data, NULL);
+
   g_list_free (element);
 }
 
@@ -1221,5 +1220,5 @@ marker_free (gpointer data,
   marker = (AfMarker *)data;
 
   g_free (marker->name);
-  g_free (marker);
+  g_slice_free (AfMarker, marker);
 }
