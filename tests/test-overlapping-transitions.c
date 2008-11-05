@@ -30,26 +30,27 @@ main (int argc, char *argv[])
                               0., 0.375,
                               AF_TIMELINE_PROGRESS_LINEAR,
                               G_OBJECT (label),
-                              "xalign", 1.,
+                              "xalign", 1., NULL,
                               NULL);
   af_animator_add_transition (id,
                               0.125, 0.5,
                               AF_TIMELINE_PROGRESS_EASE_IN_EASE_OUT,
                               G_OBJECT (label),
-                              "yalign", 1.,
+                              "yalign", 1., NULL,
                               NULL);
   af_animator_add_transition (id,
                               0.5, 0.875,
                               AF_TIMELINE_PROGRESS_LINEAR,
                               G_OBJECT (label),
-                              "xalign", 0.,
+                              "xalign", 0., NULL,
                               NULL);
   af_animator_add_transition (id,
                               0.625, 1.,
                               AF_TIMELINE_PROGRESS_EASE_IN_EASE_OUT,
                               G_OBJECT (label),
-                              "yalign", 0.,
+                              "yalign", 0., NULL,
                               NULL);
+
   af_animator_start (id, 3000);
   af_animator_set_loop (id, TRUE);
 

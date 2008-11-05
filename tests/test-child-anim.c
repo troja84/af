@@ -25,8 +25,9 @@ main (int argc, char *argv[])
                                 label,
                                 1000,
                                 AF_TIMELINE_PROGRESS_LINEAR,
-                                "x", 200,
-                                "y", 200,
+				NULL, NULL,
+                                "x", 200, NULL,
+                                "y", 200, NULL,
                                 NULL);
 
   gtk_widget_show_all (window);

@@ -17,7 +17,8 @@ play_cb (GtkButton *button,
       id = af_animator_tween (G_OBJECT (label),
                               3000,
                               AF_TIMELINE_PROGRESS_LINEAR,
-                              "xalign", 1.0,
+			      NULL, NULL,
+                              "xalign", 1.0, NULL,
                               NULL);
       af_animator_set_loop (id, TRUE);
     }

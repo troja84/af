@@ -20,9 +20,10 @@ main (int argc, char *argv[])
         id = af_animator_tween (G_OBJECT (label),
                                 1000,
                                 AF_TIMELINE_PROGRESS_LINEAR,
-                                "xalign", 1.,
-                                "yalign", 0.,
-                                "angle", 90.,
+				NULL, NULL,
+                                "xalign", 1., NULL,
+                                "yalign", 0., NULL,
+                                "angle", 90., NULL,
                                 NULL);
 
         gtk_widget_show_all (window);

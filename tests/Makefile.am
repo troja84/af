@@ -1,12 +1,15 @@
 INCLUDES = \
 	-Wall \
+	-g \
 	-I$(top_srcdir) \
-	$(AF_CFLAGS)
+	$(AF_CFLAGS) \
+	-I/usr/include/librsvg-2
 LDADDS = \
 	$(top_srcdir)/af/libanimation-framework-1.la\
 	$(AF_LIBS)
 
 noinst_PROGRAMS = \
+	test-pic-slider\
 	test-graph\
 	test-timeline-marker \
 	test-anim-control \
@@ -49,6 +52,11 @@ test_graph_SOURCES = \
 	test-graph.c
 
 test_graph_LDADD = $(LDADDS)
+
+test_pic_slider_SOURCES = \
+	test-pic-slider.c
+
+test_pic_slider_LDADD = $(LDADDS)
 
 test_chained_transitions_SOURCES = \
 	test-chained-transitions.c

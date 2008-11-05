@@ -6,6 +6,7 @@ static void
 color_transform_func (const GValue *from,
                       const GValue *to,
                       gdouble       progress,
+		      gpointer      user_data,
                       GValue       *out_value)
 {
   GdkColor *from_color, *to_color;
@@ -44,7 +45,8 @@ main (int argc, char *argv[])
   id = af_animator_tween (G_OBJECT (color_area),
                           500,
                           AF_TIMELINE_PROGRESS_EXPONENTIAL,
-                          "background-color", &to,
+			  NULL, NULL,
+                          "background-color", &to, NULL,
                           NULL);
 
   gtk_widget_show_all (window);

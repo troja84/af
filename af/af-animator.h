@@ -29,6 +29,7 @@ G_BEGIN_DECLS
 typedef void (*AfTypeTransformationFunc) (const GValue *from,
                                           const GValue *to,
                                           gdouble       progress,
+					  gpointer      user_data,
                                           GValue       *out_value);
 
 void  af_animator_register_type_transformation (GType                    type,
@@ -83,11 +84,15 @@ void     af_animator_set_loop                    (guint         id,
 guint    af_animator_tween                       (GObject                *object,
                                                   guint                   duration,
                                                   AfTimelineProgressType  type,
+						  gpointer                user_data,
+		                                  GDestroyNotify          value_destroy_func,
                                                   ...);
 guint    af_animator_child_tween                 (GtkContainer           *container,
                                                   GtkWidget              *child,
                                                   guint                   duration,
                                                   AfTimelineProgressType  type,
+						  gpointer                user_data,
+		                                  GDestroyNotify          value_destroy_func,
                                                   ...);
 
 G_END_DECLS

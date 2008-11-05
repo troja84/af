@@ -44,6 +44,7 @@ struct AfTransition
   gdouble from;
   gdouble to;
   AfTimelineProgressType type;
+  AfTypeTransformationFunc func;
 
   GObject *object;
   GObject *child;
@@ -55,14 +56,17 @@ struct AfAnimator
   AfTimeline *timeline;
   GPtrArray *transitions;
   GPtrArray *finished_transitions;
+
+  gpointer user_data;
+  GDestroyNotify value_destroy_func;
 };
 
 static AfTransition *
-af_transition_new (GObject                *object,
-                   GObject                *child,
-                   gdouble                 from,
-                   gdouble                 to,
-                   AfTimelineProgressType  type)
+af_transition_new (GObject                 *object,
+                   GObject                 *child,
+                   gdouble                  from,
+                   gdouble                  to,
+                   AfTimelineProgressType   type)
 {
   AfTransition *transition;
 
@@ -111,6 +115,9 @@ af_animator_new (void)
   animator->transitions = g_ptr_array_new ();
   animator->finished_transitions = g_ptr_array_new ();
 
+  animator->user_data = NULL;
+  animator->value_destroy_func = NULL;
+
   return animator;
 }
 
@@ -134,12 +141,16 @@ af_animator_free (AfAnimator *animator)
                        NULL);
   g_ptr_array_free (animator->finished_transitions, TRUE);
 
+  if (animator->value_destroy_func)
+    (animator->value_destroy_func) (animator->user_data);
+
   g_slice_free (AfAnimator, animator);
 }
 
 static void
 af_transition_set_progress (AfTransition *transition,
-                            gdouble       progress)
+                            gdouble       progress,
+			    gpointer      user_data)
 {
   GValue value = { 0, };
   GArray *properties;
@@ -218,9 +229,9 @@ af_transition_set_progress (AfTransition *transition,
           break;
         default:
           {
-            AfTypeTransformationFunc func = NULL;
+            AfTypeTransformationFunc func = transition->func;
 
-            if (transformable_types)
+            if (!func && transformable_types)
               func = g_hash_table_lookup (transformable_types, GSIZE_TO_POINTER (type));
 
             if (!func)
@@ -230,6 +241,7 @@ af_transition_set_progress (AfTransition *transition,
                 (func) (&property_range->from,
                         &property_range->to,
                         progress,
+			user_data,
                         &value);
                 handled = TRUE;
               }
@@ -280,7 +292,9 @@ animator_frame_cb (AfTimeline *timeline,
       transition_progress /= (transition->to - transition->from);
       transition_progress = CLAMP (transition_progress, 0.0, 1.0);
 
-      af_transition_set_progress (transition, transition_progress);
+      af_transition_set_progress (transition, 
+		                  transition_progress,
+				  animator->user_data);
 
       if (progress >= transition->to)
         {
@@ -306,9 +320,10 @@ animator_frame_cb (AfTimeline *timeline,
 }
 
 static gboolean
-transition_add_property (AfTransition *transition,
-                         GParamSpec   *pspec,
-                         GValue       *to)
+transition_add_property (AfTransition            *transition,
+                         GParamSpec              *pspec,
+                         GValue                  *to,
+			 AfTypeTransformationFunc func)
 {
   AfPropertyRange property_range = { 0, };
 
@@ -326,6 +341,8 @@ transition_add_property (AfTransition *transition,
   g_value_copy (to, &property_range.to);
 
   g_array_append_val (transition->properties, property_range);
+
+  transition->func = func;
 
   return TRUE;
 }
@@ -345,6 +362,7 @@ transition_add_properties (AfTransition *transition,
     {
       GParamSpec *pspec;
       GValue to = { 0, };
+      GValue func = { 0, };
       gchar *error = NULL;
 
       if (!child)
@@ -371,8 +389,21 @@ transition_add_properties (AfTransition *transition,
           break;
         }
 
-      transition_add_property (transition, pspec, &to);
+      g_value_init (&func, G_TYPE_POINTER);
+      G_VALUE_COLLECT (&func, args, 0, &error);
+
+      if (error)
+        {
+          g_warning (error);
+          g_free (error);
+          break;
+        }
+
+      transition_add_property (transition, pspec, &to, 
+		               (AfTypeTransformationFunc)g_value_get_pointer (&func));
+
       g_value_unset (&to);
+      g_value_unset (&func);
 
       property_name = va_arg (args, const gchar *);
     }
@@ -412,6 +443,21 @@ af_animator_add (void)
                        GUINT_TO_POINTER (id),
                        animator);
   return id;
+}
+
+void
+af_animator_add_user_data (guint          anim_id,
+		           gpointer       user_data,
+		           GDestroyNotify value_destroy_func)
+{
+  AfAnimator *animator;
+
+  animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (anim_id));
+
+  g_return_if_fail (animator != NULL);
+
+  animator->user_data = user_data;
+  animator->value_destroy_func = value_destroy_func;
 }
 
 gboolean
@@ -463,17 +509,18 @@ af_animator_add_transition (guint                   anim_id,
                                               object, args);
   va_end (args);
 
+  va_start (args, object);
   return result;
 }
 
 gboolean
-af_animator_add_child_transition_valist (guint                   anim_id,
-                                         gdouble                 from,
-                                         gdouble                 to,
-                                         AfTimelineProgressType  type,
-                                         GtkContainer           *container,
-                                         GtkWidget              *child,
-                                         va_list                 args)
+af_animator_add_child_transition_valist (guint                    anim_id,
+                                         gdouble                  from,
+                                         gdouble                  to,
+                                         AfTimelineProgressType   type,
+                                         GtkContainer            *container,
+                                         GtkWidget               *child,
+                                         va_list                  args)
 {
   AfAnimator *animator;
   AfTransition *transition;
@@ -657,6 +704,8 @@ guint
 af_animator_tween (GObject                *object,
                    guint                   duration,
                    AfTimelineProgressType  type,
+		   gpointer                user_data,
+		   GDestroyNotify          value_destroy_func,
                    ...)
 {
   va_list args;
@@ -666,7 +715,12 @@ af_animator_tween (GObject                *object,
 
   anim_id = af_animator_add ();
 
-  va_start (args, type);
+  if (user_data)
+    af_animator_add_user_data (anim_id, 
+		               user_data,
+			       value_destroy_func);
+
+  va_start (args, value_destroy_func);
 
   af_animator_add_transition_valist (anim_id,
                                      0.0, 1.0,
@@ -686,6 +740,8 @@ af_animator_child_tween (GtkContainer           *container,
                          GtkWidget              *child,
                          guint                   duration,
                          AfTimelineProgressType  type,
+		         gpointer                user_data,
+		         GDestroyNotify          value_destroy_func,
                          ...)
 {
   va_list args;
@@ -696,7 +752,12 @@ af_animator_child_tween (GtkContainer           *container,
 
   anim_id = af_animator_add ();
 
-  va_start (args, type);
+  if (user_data)
+    af_animator_add_user_data (anim_id, 
+		               user_data,
+			       value_destroy_func);
+
+  va_start (args, value_destroy_func);
 
   af_animator_add_child_transition_valist (anim_id,
                                            0.0, 1.0,
