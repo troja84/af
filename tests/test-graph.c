@@ -11,6 +11,16 @@ static gchar *test_data = "Hallo people!";
 
 static MyChartPoint start, end;
 
+static void
+free_id (guint    anim_id,
+         gpointer user_data)
+{
+  if (id == anim_id)
+    {
+      id = 0;
+    }
+}
+
 static gboolean
 play_cb (GtkButton *button,
          gpointer   user_data)
@@ -20,6 +30,8 @@ play_cb (GtkButton *button,
   if (id == 0)
     {
       start.x = start.y = 0;
+
+      my_chart_remove_all_points (MY_CHART (my_chart));
 
       g_object_set (my_chart,
                     "point", &start,
@@ -31,9 +43,9 @@ play_cb (GtkButton *button,
       test_data_new = g_strdup (test_data);
       
       id = af_animator_tween (G_OBJECT (my_chart),
-		              4000,
+		              2000,
 			      AF_TIMELINE_PROGRESS_LINEAR,
-			      test_data_new, g_free,
+			      test_data_new, g_free, free_id,
 			      "point", &end, my_chart_trans,
 			      NULL);
     }

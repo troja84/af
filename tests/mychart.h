@@ -40,6 +40,8 @@ GtkWidget *my_chart_new (void);
 void my_chart_add_point (MyChart      *chart,
 		         MyChartPoint *point);
 
+void my_chart_remove_all_points (MyChart *chart);
+
 GType my_chart_point_get_type (void) G_GNUC_CONST;
 /*
  * Method definitions.

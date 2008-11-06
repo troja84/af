@@ -104,7 +104,7 @@ my_chart_set_property (GObject      *object,
       case PROP_POINTS:
         copy = my_chart_point_copy (g_value_get_boxed (value));
 
-	if (priv->latest && (copy->x < priv->latest->x))
+	if (priv->points && priv->latest && (copy->x < priv->latest->x))
           latest = g_list_find_custom (priv->points, priv->latest,
 			               my_chart_find_latest);
 
@@ -192,6 +192,22 @@ my_chart_add_point (MyChart      *chart,
   copy = my_chart_point_copy (point);
 
   priv->points = g_list_append (priv->points, copy);
+}
+
+void
+my_chart_remove_all_points (MyChart *chart)
+{
+  MyChartPriv *priv;
+
+  priv = MY_CHART_GET_PRIV (chart);
+
+  if (priv->points)
+    {
+      g_list_foreach (priv->points, my_chart_free_points, NULL);
+      g_list_free (priv->points);
+
+      priv->points = NULL;
+    }
 }
 
 static gboolean
