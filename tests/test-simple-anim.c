@@ -1,6 +1,17 @@
 #include <gtk/gtk.h>
 #include <af/af-animator.h>
 
+static void
+finished_cb (guint id,
+	     gpointer user_data)
+{
+    GtkLabel *label;
+
+    label = GTK_LABEL (user_data);
+
+    gtk_label_set_label (label, "finished");
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -20,7 +31,7 @@ main (int argc, char *argv[])
         id = af_animator_tween (G_OBJECT (label),
                                 1000,
                                 AF_TIMELINE_PROGRESS_LINEAR,
-				NULL, NULL,
+				label, NULL, finished_cb,
                                 "xalign", 1., NULL,
                                 "yalign", 0., NULL,
                                 "angle", 90., NULL,

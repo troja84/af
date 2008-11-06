@@ -4,6 +4,27 @@
 static GtkWidget *label = NULL;
 static guint id = 0;
 
+/*
+void
+my_float_trans (const GValue *from,
+	        const GValue *to,
+	        gdouble       progress,
+		gpointer      user_data,
+		GValue       *out_value)
+{
+  gfloat pfrom, pto, res;
+
+  pfrom = g_value_get_float (from);
+  pto = g_value_get_float (to);
+
+  res = pfrom + ((pto - pfrom) * progress);
+
+  g_value_set_float (out_value, res);
+
+  printf ("RUNS!\n");
+}
+*/
+
 static void
 play_cb (GtkButton *button,
          gpointer   user_data)
@@ -17,7 +38,7 @@ play_cb (GtkButton *button,
       id = af_animator_tween (G_OBJECT (label),
                               3000,
                               AF_TIMELINE_PROGRESS_LINEAR,
-			      NULL, NULL,
+			      NULL, NULL, NULL,
                               "xalign", 1.0, NULL,
                               NULL);
       af_animator_set_loop (id, TRUE);

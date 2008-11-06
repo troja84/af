@@ -31,7 +31,7 @@ play_cb (GtkButton *button,
       test_data_new = g_strdup (test_data);
       
       id = af_animator_tween (G_OBJECT (my_chart),
-		              1000,
+		              4000,
 			      AF_TIMELINE_PROGRESS_LINEAR,
 			      test_data_new, g_free,
 			      "point", &end, my_chart_trans,
@@ -39,6 +39,16 @@ play_cb (GtkButton *button,
     }
   else
     af_animator_resume (id);
+
+  return FALSE;
+}
+
+static gboolean
+reverse_cb (GtkButton *button,
+         gpointer   user_data)
+{
+  if (id)
+    af_animator_reverse (id);
 
   return FALSE;
 }
@@ -72,6 +82,11 @@ int main( int   argc,
   gtk_box_pack_start (GTK_BOX (bbox), button, FALSE, FALSE, 0);
   g_signal_connect (button, "clicked",
                     G_CALLBACK (play_cb), NULL);
+
+  button = gtk_button_new_from_stock (GTK_STOCK_REFRESH);
+  gtk_box_pack_start (GTK_BOX (bbox), button, FALSE, FALSE, 0);
+  g_signal_connect (button, "clicked",
+                    G_CALLBACK (reverse_cb), NULL);
 
   gtk_box_pack_end (GTK_BOX (box), bbox, FALSE, FALSE, 0);
 

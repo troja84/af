@@ -32,6 +32,9 @@ typedef void (*AfTypeTransformationFunc) (const GValue *from,
 					  gpointer      user_data,
                                           GValue       *out_value);
 
+typedef	void (*AfFinishedAnimationNotify) (guint    anim_id,
+		                           gpointer user_data);
+
 void  af_animator_register_type_transformation (GType                    type,
                                                 AfTypeTransformationFunc trans_func);
 
@@ -68,6 +71,13 @@ gboolean af_animator_add_child_transition        (guint                   anim_i
 gboolean af_animator_start                       (guint         id,
                                                   guint         duration);
 
+gboolean af_animator_add_user_data               (guint          anim_id,
+		                                  gpointer       user_data,
+		                                  GDestroyNotify value_destroy_func);
+
+gboolean af_animator_add_finished_callback       (guint                     anim_id,
+		                                  AfFinishedAnimationNotify finished_notify);
+
 void     af_animator_remove                      (guint         id);
 void     af_animator_pause                       (guint         id);
 void     af_animator_resume                      (guint         id);
@@ -81,18 +91,20 @@ void     af_animator_set_loop                    (guint         id,
                                                   gboolean      loop);
 
 /* Helper functions */
-guint    af_animator_tween                       (GObject                *object,
-                                                  guint                   duration,
-                                                  AfTimelineProgressType  type,
-						  gpointer                user_data,
-		                                  GDestroyNotify          value_destroy_func,
+guint    af_animator_tween                       (GObject                  *object,
+                                                  guint                     duration,
+                                                  AfTimelineProgressType    type,
+						  gpointer                  user_data,
+		                                  GDestroyNotify            value_destroy_func,
+                                                  AfFinishedAnimationNotify finished_notify,
                                                   ...);
-guint    af_animator_child_tween                 (GtkContainer           *container,
-                                                  GtkWidget              *child,
-                                                  guint                   duration,
-                                                  AfTimelineProgressType  type,
-						  gpointer                user_data,
-		                                  GDestroyNotify          value_destroy_func,
+guint    af_animator_child_tween                 (GtkContainer             *container,
+                                                  GtkWidget                *child,
+                                                  guint                     duration,
+                                                  AfTimelineProgressType    type,
+						  gpointer                  user_data,
+		                                  GDestroyNotify            value_destroy_func,
+						  AfFinishedAnimationNotify finished_notify,
                                                   ...);
 
 G_END_DECLS

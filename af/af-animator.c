@@ -59,7 +59,11 @@ struct AfAnimator
 
   gpointer user_data;
   GDestroyNotify value_destroy_func;
+
+  AfFinishedAnimationNotify finished_notify;
 };
+
+static void af_animator_remove_with_notification (guint id);
 
 static AfTransition *
 af_transition_new (GObject                 *object,
@@ -118,6 +122,8 @@ af_animator_new (void)
   animator->user_data = NULL;
   animator->value_destroy_func = NULL;
 
+  animator->finished_notify = NULL;
+
   return animator;
 }
 
@@ -155,6 +161,7 @@ af_transition_set_progress (AfTransition *transition,
   GValue value = { 0, };
   GArray *properties;
   guint i;
+  AfTypeTransformationFunc func;
 
   properties = transition->properties;
   progress = af_timeline_calculate_progress (progress, transition->type);
@@ -185,68 +192,69 @@ af_transition_set_progress (AfTransition *transition,
 
       g_value_init (&value, property_range->pspec->value_type);
       type = property_range->pspec->value_type;
+      
+      func = transition->func;
 
-      switch (type)
+      if (!func && transformable_types)
+        func = g_hash_table_lookup (transformable_types, GSIZE_TO_POINTER (type));
+
+      if (!func)
         {
-        case G_TYPE_INT:
-          {
-            gint from, to, val;
+          switch (type)
+            {
+              case G_TYPE_INT:
+                {
+                  gint from, to, val;
 
-            from = g_value_get_int (&property_range->from);
-            to = g_value_get_int (&property_range->to);
+                  from = g_value_get_int (&property_range->from);
+                  to = g_value_get_int (&property_range->to);
 
-            val = from + ((to - from) * progress);
-            g_value_set_int (&value, val);
-            handled = TRUE;
-          }
+                  val = from + ((to - from) * progress);
+                  g_value_set_int (&value, val);
+                  handled = TRUE;
+                }
 
-          break;
-        case G_TYPE_DOUBLE:
-          {
-            gdouble from, to, val;
+                break;
+              case G_TYPE_DOUBLE:
+                {
+                  gdouble from, to, val;
 
-            from = g_value_get_double (&property_range->from);
-            to = g_value_get_double (&property_range->to);
+                  from = g_value_get_double (&property_range->from);
+                  to = g_value_get_double (&property_range->to);
 
-            val = from + ((to - from) * progress);
-            g_value_set_double (&value, val);
-            handled = TRUE;
-          }
+                  val = from + ((to - from) * progress);
+                  g_value_set_double (&value, val);
+                  handled = TRUE;
+		}
 
-          break;
-        case G_TYPE_FLOAT:
-          {
-            gfloat from, to, val;
+                break;
+              case G_TYPE_FLOAT:
+                {
+                  gfloat from, to, val;
 
-            from = g_value_get_float (&property_range->from);
-            to = g_value_get_float (&property_range->to);
+                  from = g_value_get_float (&property_range->from);
+                  to = g_value_get_float (&property_range->to);
 
-            val = from + ((to - from) * progress);
-            g_value_set_float (&value, val);
-            handled = TRUE;
-          }
+                  val = from + ((to - from) * progress);
+                  g_value_set_float (&value, val);
+                  handled = TRUE;
+                }
 
-          break;
-        default:
-          {
-            AfTypeTransformationFunc func = transition->func;
-
-            if (!func && transformable_types)
-              func = g_hash_table_lookup (transformable_types, GSIZE_TO_POINTER (type));
-
-            if (!func)
-              g_warning ("Property of type '%s' not handled", g_type_name (type));
-            else
-              {
-                (func) (&property_range->from,
-                        &property_range->to,
-                        progress,
-			user_data,
-                        &value);
-                handled = TRUE;
-              }
-          }
+                break;
+              default:
+                g_warning ("Property of type '%s' not handled", g_type_name (type));
+            }
         }
+      else
+        {
+          (func) (&property_range->from,
+                  &property_range->to,
+                  progress,
+	          user_data,
+                  &value);
+           handled = TRUE;
+        }
+
 
       if (handled)
         {
@@ -445,19 +453,40 @@ af_animator_add (void)
   return id;
 }
 
-void
+gboolean
 af_animator_add_user_data (guint          anim_id,
 		           gpointer       user_data,
 		           GDestroyNotify value_destroy_func)
 {
   AfAnimator *animator;
 
+  g_return_val_if_fail (animators != NULL, FALSE);
+
   animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (anim_id));
 
-  g_return_if_fail (animator != NULL);
+  g_return_val_if_fail (animator != NULL, FALSE);
 
   animator->user_data = user_data;
   animator->value_destroy_func = value_destroy_func;
+
+  return TRUE;
+}
+
+gboolean
+af_animator_add_finished_callback (guint anim_id,
+		                   AfFinishedAnimationNotify finished_notify)
+{
+  AfAnimator *animator;
+
+  g_return_val_if_fail (animators != NULL, FALSE);
+
+  animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (anim_id));
+
+  g_return_val_if_fail (animator != NULL, FALSE);
+
+  animator->finished_notify = finished_notify;
+
+  return TRUE;
 }
 
 gboolean
@@ -589,7 +618,7 @@ af_animator_start (guint id,
   g_signal_connect (animator->timeline, "frame",
                     G_CALLBACK (animator_frame_cb), animator);
   g_signal_connect_swapped (animator->timeline, "finished",
-                            G_CALLBACK (af_animator_remove),
+                            G_CALLBACK (af_animator_remove_with_notification),
                             GUINT_TO_POINTER (id));
 
   af_timeline_start (animator->timeline);
@@ -685,6 +714,23 @@ af_animator_remove (guint id)
   g_hash_table_remove (animators, GUINT_TO_POINTER (id));
 }
 
+static void 
+af_animator_remove_with_notification (guint id)
+{
+  AfAnimator *animator;
+
+  g_return_if_fail (animators != NULL);
+
+  animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (id));
+
+  g_return_if_fail (animator != NULL);
+
+  if (animator->finished_notify)
+    (animator->finished_notify) (id, animator->user_data);
+
+  g_hash_table_remove (animators, GUINT_TO_POINTER (id));
+}
+
 void
 af_animator_set_loop (guint    id,
                       gboolean loop)
@@ -701,11 +747,12 @@ af_animator_set_loop (guint    id,
 }
 
 guint
-af_animator_tween (GObject                *object,
-                   guint                   duration,
-                   AfTimelineProgressType  type,
-		   gpointer                user_data,
-		   GDestroyNotify          value_destroy_func,
+af_animator_tween (GObject                  *object,
+                   guint                     duration,
+                   AfTimelineProgressType    type,
+		   gpointer                  user_data,
+		   GDestroyNotify            value_destroy_func,
+		   AfFinishedAnimationNotify finished_notify,
                    ...)
 {
   va_list args;
@@ -720,7 +767,11 @@ af_animator_tween (GObject                *object,
 		               user_data,
 			       value_destroy_func);
 
-  va_start (args, value_destroy_func);
+  if (finished_notify)
+    af_animator_add_finished_callback (anim_id,
+		                       finished_notify);
+
+  va_start (args, finished_notify);
 
   af_animator_add_transition_valist (anim_id,
                                      0.0, 1.0,
@@ -736,12 +787,13 @@ af_animator_tween (GObject                *object,
 }
 
 guint
-af_animator_child_tween (GtkContainer           *container,
-                         GtkWidget              *child,
-                         guint                   duration,
-                         AfTimelineProgressType  type,
-		         gpointer                user_data,
-		         GDestroyNotify          value_destroy_func,
+af_animator_child_tween (GtkContainer             *container,
+                         GtkWidget                *child,
+                         guint                     duration,
+                         AfTimelineProgressType    type,
+		         gpointer                  user_data,
+		         GDestroyNotify            value_destroy_func,
+		         AfFinishedAnimationNotify finished_notify,
                          ...)
 {
   va_list args;
@@ -757,7 +809,11 @@ af_animator_child_tween (GtkContainer           *container,
 		               user_data,
 			       value_destroy_func);
 
-  va_start (args, value_destroy_func);
+  if (finished_notify)
+    af_animator_add_finished_callback (anim_id,
+		                       finished_notify);
+
+  va_start (args, finished_notify);
 
   af_animator_add_child_transition_valist (anim_id,
                                            0.0, 1.0,

@@ -25,7 +25,7 @@ main (int argc, char *argv[])
                                 label,
                                 1000,
                                 AF_TIMELINE_PROGRESS_LINEAR,
-				NULL, NULL,
+				NULL, NULL, NULL,
                                 "x", 200, NULL,
                                 "y", 200, NULL,
                                 NULL);

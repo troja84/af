@@ -14,6 +14,8 @@ typedef struct MyChartPriv MyChartPriv;
 struct MyChartPriv
 {
   GList *points;
+
+  MyChartPoint *latest;
 };
 
 enum 
@@ -36,13 +38,13 @@ static void  my_chart_finalize         (GObject *object);
 static gboolean my_chart_expose        (GtkWidget      *chart,
 		                        GdkEventExpose *event);
 
-static void my_chart_free_list         (GList *list);
-
 static void my_chart_free_points       (gpointer data,
 	                                gpointer user_data);
 
 static gpointer my_chart_point_copy    (gpointer boxed);
 
+static gint my_chart_find_latest (gconstpointer a,
+		                  gconstpointer b);
 
 G_DEFINE_TYPE (MyChart, my_chart, GTK_TYPE_DRAWING_AREA);
 	
@@ -90,23 +92,46 @@ my_chart_set_property (GObject      *object,
   MyChart *chart;
   MyChartPriv *priv;
   MyChartPoint *copy;
+  GList *latest, *next;
 
   chart = MY_CHART (object);
   priv = MY_CHART_GET_PRIV (chart);
+
+  latest = NULL;
 
   switch (prop_id)
     {
       case PROP_POINTS:
         copy = my_chart_point_copy (g_value_get_boxed (value));
-        
-	priv->points = g_list_append (priv->points, copy);
+
+	if (priv->latest && (copy->x < priv->latest->x))
+          latest = g_list_find_custom (priv->points, priv->latest,
+			               my_chart_find_latest);
+
+        if (latest)
+	  {
+	    while (latest)
+            {
+              priv->points = g_list_remove_link (priv->points, latest);
+	      my_chart_free_points (latest->data, NULL);
+	      next = g_list_next (latest);
+	      g_list_free_1 (latest);
+
+	      latest = next;
+	    }
+
+	    priv->latest = (MyChartPoint*) (g_list_last (priv->points))->data;
+	  }
+	else
+	  {
+	   priv->points = g_list_append (priv->points, copy);
+	   priv->latest = copy;
+	  }
+	
 	if (GTK_WIDGET_DRAWABLE (GTK_WIDGET (chart)) == TRUE)
 	  { 
-	    /*
 	    gdk_window_invalidate_rect (GTK_WIDGET (chart)->window, 
 			                NULL, TRUE);
-	    */
-	    my_chart_expose (GTK_WIDGET (chart), NULL);
 	  }
 	break;
       default:
@@ -224,22 +249,22 @@ my_chart_expose (GtkWidget      *chart,
   return FALSE;
 }
 
-static void
-my_chart_free_list (GList *list)
+static gint
+my_chart_find_latest (gconstpointer a,
+		      gconstpointer b)
 {
-  GList *prev, *next;
+  MyChartPoint *data, *cmp;
 
-  prev = list;
+  data = (MyChartPoint *)a;
+  cmp = (MyChartPoint *)b;
 
-  while (prev)
-    {
-      next = g_list_next (prev);
+  if (data->x == cmp->x)
+    return 0;
 
-      my_chart_free_points (prev->data, NULL);
-      g_list_free (prev);
+  if (data->x < cmp->x)
+    return -1;
 
-      prev = next;
-    }
+  return 1;
 }
 
 static void
@@ -263,9 +288,6 @@ my_chart_trans (const GValue *from,
 {
   MyChartPoint *pfrom, *pto, *res;
   gdouble d, dl, m, t_square_end;
-
-  if (user_data)
-    printf ("USER DATA: %s\n", (gchar *)user_data);
 
   d = 5.0;
   m = 1000.0;
