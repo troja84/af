@@ -454,7 +454,7 @@ af_animator_add (void)
 }
 
 gboolean
-af_animator_add_user_data (guint          anim_id,
+af_animator_set_user_data (guint          anim_id,
 		           gpointer       user_data,
 		           GDestroyNotify value_destroy_func)
 {
@@ -466,6 +466,9 @@ af_animator_add_user_data (guint          anim_id,
 
   g_return_val_if_fail (animator != NULL, FALSE);
 
+  if (animator->value_destroy_func)
+    (animator->value_destroy_func) (animator->user_data);
+
   animator->user_data = user_data;
   animator->value_destroy_func = value_destroy_func;
 
@@ -473,8 +476,8 @@ af_animator_add_user_data (guint          anim_id,
 }
 
 gboolean
-af_animator_add_finished_callback (guint anim_id,
-		                   AfFinishedAnimationNotify finished_notify)
+af_animator_set_finished_notify (guint anim_id,
+		                 AfFinishedAnimationNotify finished_notify)
 {
   AfAnimator *animator;
 
@@ -677,21 +680,6 @@ af_animator_reverse (guint id)
 }
 
 void
-af_animator_skip (guint   id,
-		  gdouble delta_progress)
-{
-  AfAnimator *animator;
-
-  g_return_if_fail (animators != NULL);
-
-  animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (id));
-
-  g_return_if_fail (animator != NULL);
-
-  af_timeline_skip (animator->timeline, delta_progress);
-}
-
-void
 af_animator_advance (guint   id,
 		     gdouble progress)
 {
@@ -763,13 +751,13 @@ af_animator_tween (GObject                  *object,
   anim_id = af_animator_add ();
 
   if (user_data)
-    af_animator_add_user_data (anim_id, 
+    af_animator_set_user_data (anim_id, 
 		               user_data,
 			       value_destroy_func);
 
   if (finished_notify)
-    af_animator_add_finished_callback (anim_id,
-		                       finished_notify);
+    af_animator_set_finished_notify (anim_id,
+		                     finished_notify);
 
   va_start (args, finished_notify);
 
@@ -791,9 +779,6 @@ af_animator_child_tween (GtkContainer             *container,
                          GtkWidget                *child,
                          guint                     duration,
                          AfTimelineProgressType    type,
-		         gpointer                  user_data,
-		         GDestroyNotify            value_destroy_func,
-		         AfFinishedAnimationNotify finished_notify,
                          ...)
 {
   va_list args;
@@ -804,16 +789,7 @@ af_animator_child_tween (GtkContainer             *container,
 
   anim_id = af_animator_add ();
 
-  if (user_data)
-    af_animator_add_user_data (anim_id, 
-		               user_data,
-			       value_destroy_func);
-
-  if (finished_notify)
-    af_animator_add_finished_callback (anim_id,
-		                       finished_notify);
-
-  va_start (args, finished_notify);
+  va_start (args, type);
 
   af_animator_add_child_transition_valist (anim_id,
                                            0.0, 1.0,

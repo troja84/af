@@ -75,14 +75,6 @@ stop_cb (GtkButton *button,
 }
 
 static void
-skip_cb (GtkButton *button,
-         gpointer   user_data)
-{
-  if (id != 0)
-    af_animator_skip (id, (gdouble) 500 / 3000);
-}
-
-static void
 advance_cb (GtkButton *button,
             gpointer   user_data)
 {
@@ -133,11 +125,6 @@ main (int argc, char *argv[])
   gtk_box_pack_end (GTK_BOX (box), bbox, FALSE, FALSE, 0);
 
   bbox = gtk_hbutton_box_new ();
-
-  button = gtk_button_new_from_stock (GTK_STOCK_MEDIA_FORWARD);
-  gtk_box_pack_start (GTK_BOX (bbox), button, FALSE, FALSE, 0);
-  g_signal_connect (button, "clicked",
-                    G_CALLBACK (skip_cb), NULL);
 
   button = gtk_button_new_from_stock (GTK_STOCK_MEDIA_NEXT);
   gtk_box_pack_start (GTK_BOX (bbox), button, FALSE, FALSE, 0);

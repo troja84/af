@@ -62,7 +62,8 @@ struct AfMarker
 
 /* Marker helper functions - START */
 static void marker_emit_signals (AfTimeline *timeline,
-		                 gdouble    new_progress);
+		                 gdouble    progress,
+				 gboolean   equal);
 
 static void marker_skip_progress (AfTimeline *timeline,
 		                  gdouble     progress);
@@ -70,10 +71,10 @@ static void marker_skip_progress (AfTimeline *timeline,
 static gint marker_compare_progress (gconstpointer a,
 		                     gconstpointer b);
 
+/*
 static gint marker_compare_name_with_progress (gconstpointer a,
 		                               gconstpointer b);
 
-/*
 static gint marker_compare_name (gconstpointer a,
 		                 gconstpointer b);
 */
@@ -372,9 +373,11 @@ af_timeline_run_frame (AfTimeline *timeline)
   else
     progress = (priv->direction == AF_TIMELINE_DIRECTION_FORWARD) ? 1.0 : 0.0;
 
+  marker_emit_signals (timeline, progress, FALSE);
+
   g_signal_emit (timeline, signals [FRAME], 0, progress);
 
-  marker_emit_signals (timeline, progress);
+  marker_emit_signals (timeline, progress, TRUE);
 
   if ((priv->direction == AF_TIMELINE_DIRECTION_FORWARD && progress >= 1.0) ||
       (priv->direction == AF_TIMELINE_DIRECTION_BACKWARD && progress <= 0.0))
@@ -440,18 +443,6 @@ af_timeline_new_for_screen (guint      duration,
 		       NULL);
 }
 
-AfTimeline *
-af_timeline_clone (AfTimeline *timeline)
-{
-  return g_object_new (AF_TYPE_TIMELINE,
-		       "fps", af_timeline_get_fps (timeline),
-		       "direction", af_timeline_get_direction (timeline),
-		       "loop", af_timeline_get_loop (timeline),
-		       "duration", af_timeline_get_duration (timeline),
-		       "screen", af_timeline_get_screen (timeline),
-		       NULL);
-}
-
 /**
  * af_timeline_start:
  * @timeline: A #AfTimeline
@@ -492,6 +483,8 @@ af_timeline_start (AfTimeline *timeline)
     priv->animations_enabled = (enable_animations == TRUE);
 
     g_signal_emit (timeline, signals [STARTED], 0);
+    
+    marker_emit_signals (timeline, 0, TRUE);
 
     if (enable_animations)
       priv->source_id = gdk_threads_add_timeout (FRAME_INTERVAL (priv->fps),
@@ -596,15 +589,15 @@ af_timeline_rewind (AfTimeline *timeline)
  * af_timeline_advance:
  * @timeline: A #AfTimeline
  *
- * Advance timeline to the requested frame number.
+ * Advance timeline to the requested fraction of time.
  **/
 void
 af_timeline_advance (AfTimeline *timeline,
 		     gdouble     progress)
 {
   AfTimelinePriv *priv;
-  gdouble delta_progress;
 
+  g_return_if_fail (progress >= 0.0 && progress <= 1.0);
   g_return_if_fail (AF_IS_TIMELINE (timeline));
 
   priv = AF_TIMELINE_GET_PRIV (timeline);
@@ -615,47 +608,16 @@ af_timeline_advance (AfTimeline *timeline,
       priv->last_progress <= progress))
     return;
 
-  delta_progress = 1 / priv->fps / priv->duration;
-
   /* enter critical section */
   g_static_mutex_lock (&priv->progress_mutex);
 
-  /* substract 1 so the next handled frame is the one requested */
-  if (priv->direction == AF_TIMELINE_DIRECTION_FORWARD)
-    priv->last_progress = progress - delta_progress;
-  else
-    priv->last_progress = progress + delta_progress;
+  priv->last_progress = progress;
       
   marker_skip_progress (timeline, priv->last_progress);
 
   g_static_mutex_unlock (&priv->progress_mutex);
   /* leave critical section */
 
-}
-
-/**
- * af_timeline_skip:
- * @timeline: A #AfTimeline
- *
- * Skips the requested number of frames.
- **/
-void
-af_timeline_skip (AfTimeline *timeline,
-		  gdouble     delta_progress)
-{
-  AfTimelinePriv *priv;
-  gdouble new_progress;
-
-  g_return_if_fail (AF_IS_TIMELINE (timeline));
-
-  priv = AF_TIMELINE_GET_PRIV (timeline);
-
-  if (priv->direction == AF_TIMELINE_DIRECTION_FORWARD)
-    new_progress = priv->last_progress + delta_progress;
-  else
-    new_progress = priv->last_progress - delta_progress;
-      
-  af_timeline_advance (timeline, new_progress);
 }
 
 /**
@@ -668,12 +630,18 @@ gdouble
 af_timeline_get_progress (AfTimeline *timeline)
 {
   AfTimelinePriv *priv;
+  gdouble timer_elapsed;
 
   g_return_val_if_fail (AF_IS_TIMELINE (timeline), 0);
 
   priv = AF_TIMELINE_GET_PRIV (timeline);
 
-  return priv->last_progress;
+  timer_elapsed = 0.0;
+
+  if (priv->timer)
+    timer_elapsed = g_timer_elapsed (priv->timer, NULL) * 1000;
+
+  return priv->last_progress + timer_elapsed;
 }
 
 /**
@@ -707,6 +675,9 @@ af_timeline_add_marker (AfTimeline  *timeline,
   AfMarker *marker;
 
   g_return_if_fail (AF_IS_TIMELINE (timeline));
+  g_return_if_fail (marker_name != NULL);
+  g_return_if_fail (af_timeline_has_marker (timeline, marker_name) == FALSE);
+  g_return_if_fail (progress >= 0.0 && progress <= 1.0);
 
   priv = AF_TIMELINE_GET_PRIV (timeline);
 
@@ -763,7 +734,8 @@ af_timeline_has_marker (AfTimeline  *timeline,
 
 gchar**
 af_timeline_list_markers (AfTimeline *timeline,
-		          gdouble     progress)
+		          gdouble     start_progress,
+			  gdouble     end_progress)
 {
   AfTimelinePriv *priv;
   GList *element, *iterator;
@@ -774,6 +746,9 @@ af_timeline_list_markers (AfTimeline *timeline,
   list = NULL;
 
   g_return_val_if_fail (AF_IS_TIMELINE (timeline), NULL);
+  g_return_val_if_fail (start_progress <= end_progress, NULL);
+  g_return_val_if_fail (start_progress >= 0, NULL);
+  g_return_val_if_fail (end_progress <= 1, NULL);
 
   priv = AF_TIMELINE_GET_PRIV (timeline);
 
@@ -782,28 +757,29 @@ af_timeline_list_markers (AfTimeline *timeline,
   if (!element)
     return NULL;
 
-  if (progress >= 0 && progress <= 1)
+  if (start_progress == 0 && end_progress == 1)
+    count = g_list_length (element);
+  else
     {
-      element = g_list_find_custom (priv->marker_list, &progress,
-		                    marker_compare_name_with_progress);
+      while (element && (((AfMarker *)element->data)->progress < start_progress))
+        element = g_list_next (element);
 
       if (!element)
         return NULL;
 
       iterator = element;
 
-      while (iterator && (((AfMarker *)iterator->data)->progress == progress))
+      while (iterator && (((AfMarker *)iterator->data)->progress >= start_progress)
+	      && (((AfMarker *)iterator->data)->progress <= end_progress))
         {
           count += 1;
           iterator = g_list_next (iterator);
 	}
     }
-  else
-    count = g_list_length (element);
   
   list = g_new0 (gchar*, count + 1);
 
-  while (element && (index < count || progress == -1))
+  while (element && index < count)
     {
       list[index++] = g_strdup (((AfMarker *)element->data)->name);
 
@@ -848,7 +824,7 @@ af_timeline_remove_marker (AfTimeline  *timeline,
  *
  * 
  **/
-void
+gboolean
 af_timeline_advance_to_marker (AfTimeline  *timeline,
 		               const gchar *marker_name)
 {
@@ -857,7 +833,8 @@ af_timeline_advance_to_marker (AfTimeline  *timeline,
 
   element = NULL;
 
-  g_return_if_fail (AF_IS_TIMELINE (timeline));
+  g_return_val_if_fail (AF_IS_TIMELINE (timeline), FALSE);
+  g_return_val_if_fail (marker_name != NULL, FALSE);
 
   priv = AF_TIMELINE_GET_PRIV (timeline);
 
@@ -865,9 +842,11 @@ af_timeline_advance_to_marker (AfTimeline  *timeline,
 			        marker_compare_name_with_string);
 
   if (!element)
-    return;
+    return FALSE;
 
   af_timeline_advance (timeline, ((AfMarker *)element->data)->progress);
+
+  return TRUE;
 }
 
 /* Marker API End */
@@ -1097,7 +1076,8 @@ af_timeline_calculate_progress (gdouble                linear_progress,
 /* Marker help functions */
 static void
 marker_emit_signals (AfTimeline *timeline,
-		     gdouble     new_progress)
+		     gdouble     progress,
+		     gboolean    equal)
 {
   AfTimelinePriv *priv;
 
@@ -1109,24 +1089,52 @@ marker_emit_signals (AfTimeline *timeline,
     {
       if (priv->direction == AF_TIMELINE_DIRECTION_FORWARD)
 	{
-          while (priv->marker_position && 
-		 ((AfMarker *)priv->marker_position->data)->progress 
-		 <= new_progress)
+          if (equal == FALSE)
 	    {
-              g_signal_emit (timeline, signals [MARKER], 0, 
-			     ((AfMarker *)priv->marker_position->data)->name);
-	      priv->marker_position = g_list_next (priv->marker_position);
+	        while (priv->marker_position && 
+		       ((AfMarker *)priv->marker_position->data)->progress 
+		       < progress)
+	          {
+                    g_signal_emit (timeline, signals [MARKER], 0, 
+			           ((AfMarker *)priv->marker_position->data)->name);
+	            priv->marker_position = g_list_next (priv->marker_position);
+	          }
+	    }	    
+	  else
+	    {	  
+	        while (priv->marker_position && 
+		       ((AfMarker *)priv->marker_position->data)->progress 
+		       <= progress)
+	          {
+                    g_signal_emit (timeline, signals [MARKER], 0, 
+			           ((AfMarker *)priv->marker_position->data)->name);
+	            priv->marker_position = g_list_next (priv->marker_position);
+	          }
 	    }
 	}
       else
 	{
-          while (priv->marker_position && 
-	         ((AfMarker *)priv->marker_position->data)->progress 
-		 >= new_progress)
+	  if (equal == FALSE)
 	    {
-              g_signal_emit (timeline, signals [MARKER], 0, 
-			     ((AfMarker *)priv->marker_position->data)->name);
-	      priv->marker_position = g_list_previous (priv->marker_position);
+              while (priv->marker_position && 
+	             ((AfMarker *)priv->marker_position->data)->progress 
+		     > progress)
+	        {
+                  g_signal_emit (timeline, signals [MARKER], 0, 
+			         ((AfMarker *)priv->marker_position->data)->name);
+	          priv->marker_position = g_list_previous (priv->marker_position);
+	        }
+	    }
+	  else
+	    {
+              while (priv->marker_position && 
+	             ((AfMarker *)priv->marker_position->data)->progress 
+		     >= progress)
+	        {
+                  g_signal_emit (timeline, signals [MARKER], 0, 
+			         ((AfMarker *)priv->marker_position->data)->name);
+	          priv->marker_position = g_list_previous (priv->marker_position);
+	        }
 	    }
 	}
     }
@@ -1178,6 +1186,7 @@ marker_compare_progress (gconstpointer a,
   return 1; 
 }
 
+/*
 static gint
 marker_compare_name_with_progress (gconstpointer a,
 		                   gconstpointer b)
@@ -1195,7 +1204,6 @@ marker_compare_name_with_progress (gconstpointer a,
   return 1; 
 }
 
-/*
 static gint 
 marker_compare_name (gconstpointer a,
 		     gconstpointer b)

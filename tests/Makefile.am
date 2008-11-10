@@ -6,7 +6,8 @@ INCLUDES = \
 	-I/usr/include/librsvg-2
 LDADDS = \
 	$(top_srcdir)/af/libanimation-framework-1.la\
-	$(AF_LIBS)
+	$(AF_LIBS) \
+	-lrsvg-2
 
 noinst_PROGRAMS = \
 	test-pic-slider\
@@ -54,6 +55,8 @@ test_graph_SOURCES = \
 test_graph_LDADD = $(LDADDS)
 
 test_pic_slider_SOURCES = \
+	myslider.c \
+	myslider.h \
 	test-pic-slider.c
 
 test_pic_slider_LDADD = $(LDADDS)

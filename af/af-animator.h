@@ -71,19 +71,17 @@ gboolean af_animator_add_child_transition        (guint                   anim_i
 gboolean af_animator_start                       (guint         id,
                                                   guint         duration);
 
-gboolean af_animator_add_user_data               (guint          anim_id,
+gboolean af_animator_set_user_data               (guint          anim_id,
 		                                  gpointer       user_data,
 		                                  GDestroyNotify value_destroy_func);
 
-gboolean af_animator_add_finished_callback       (guint                     anim_id,
+gboolean af_animator_set_finished_notify         (guint                     anim_id,
 		                                  AfFinishedAnimationNotify finished_notify);
 
 void     af_animator_remove                      (guint         id);
 void     af_animator_pause                       (guint         id);
 void     af_animator_resume                      (guint         id);
 void     af_animator_reverse                     (guint         id);
-void     af_animator_skip                        (guint         id,
-		                                  gdouble       delta_progress);
 void     af_animator_advance                     (guint         id,
 		                                  gdouble       progress);
 
@@ -102,9 +100,6 @@ guint    af_animator_child_tween                 (GtkContainer             *cont
                                                   GtkWidget                *child,
                                                   guint                     duration,
                                                   AfTimelineProgressType    type,
-						  gpointer                  user_data,
-		                                  GDestroyNotify            value_destroy_func,
-						  AfFinishedAnimationNotify finished_notify,
                                                   ...);
 
 G_END_DECLS

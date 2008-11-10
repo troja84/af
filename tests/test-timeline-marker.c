@@ -47,7 +47,7 @@ init_gtk_combo_box_text (AfTimeline *timeline,
 
   g_assert (timeline);
 
-  list = af_timeline_list_markers (timeline, -1);
+  list = af_timeline_list_markers (timeline, 0.5, 1);
 
   size = g_strv_length (list);
 
@@ -70,10 +70,9 @@ free_timeline (AfTimeline *timeline)
 }
 
 static void
-anim_cb (AfTimeline   *timeline,
-         gdouble      progress,
-	 const gchar* marker_name,
-         gpointer     user_data)
+marker_cb (AfTimeline   *timeline,
+	   const gchar* marker_name,
+           gpointer     user_data)
 {
   gtk_label_set_label (GTK_LABEL (label), marker_name);
 }
@@ -88,7 +87,7 @@ play_cb (GtkButton *button,
   af_timeline_set_loop (timeline, TRUE);
 
   g_signal_connect (timeline, "marker",
-		    G_CALLBACK (anim_cb), label);
+		    G_CALLBACK (marker_cb), label);
     
   af_timeline_start (timeline);
 }
@@ -127,14 +126,6 @@ stop_cb (GtkButton *button,
 {
   if (timeline)
     af_timeline_stop (timeline);
-}
-
-static void
-skip_cb (GtkButton *button,
-         gpointer   user_data)
-{
-  if (timeline)
-    af_timeline_skip (timeline, SKIP);
 }
 
 static void
@@ -194,11 +185,6 @@ main (int argc, char *argv[])
   gtk_box_pack_end (GTK_BOX (box), bbox, FALSE, FALSE, 0);
 
   bbox = gtk_hbutton_box_new ();
-
-  button = gtk_button_new_from_stock (GTK_STOCK_MEDIA_FORWARD);
-  gtk_box_pack_start (GTK_BOX (bbox), button, FALSE, FALSE, 0);
-  g_signal_connect (button, "clicked",
-                    G_CALLBACK (skip_cb), NULL);
 
   button = gtk_button_new_from_stock (GTK_STOCK_MEDIA_NEXT);
   gtk_box_pack_start (GTK_BOX (bbox), button, FALSE, FALSE, 0);

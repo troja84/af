@@ -68,7 +68,6 @@ GType                 af_timeline_get_type           (void) G_GNUC_CONST;
 AfTimeline           *af_timeline_new                (guint                    duration);
 AfTimeline           *af_timeline_new_for_screen     (guint                    duration,
                                                       GdkScreen               *screen);
-AfTimeline           *af_timeline_clone              (AfTimeline              *timeline);
 
 void                  af_timeline_start              (AfTimeline              *timeline);
 void                  af_timeline_pause              (AfTimeline              *timeline);
@@ -76,8 +75,6 @@ void                  af_timeline_stop               (AfTimeline              *t
 void                  af_timeline_rewind             (AfTimeline              *timeline);
 void                  af_timeline_advance            (AfTimeline             *timeline,
 		                                      gdouble                 new_progress);
-void                  af_timeline_skip               (AfTimeline              *timeline,
-		                                      gdouble                  delta_progress);
 
 gdouble               af_timeline_get_progress       (AfTimeline              *timeline);
 
@@ -89,10 +86,11 @@ void                  af_timeline_add_marker         (AfTimeline             *ti
 gboolean              af_timeline_has_marker          (AfTimeline             *timeline,
 		                                       const gchar            *marker_name);
 gchar**               af_timeline_list_markers        (AfTimeline             *timeline,
-		                                       gdouble                 progress);
+		                                       gdouble                 start_progress,
+		                                       gdouble                 end_progress);
 void                  af_timeline_remove_marker       (AfTimeline             *timeline,
 		                                       const gchar            *marker_name);
-void                  af_timeline_advance_to_marker   (AfTimeline             *timeline,
+gboolean              af_timeline_advance_to_marker   (AfTimeline             *timeline,
 		                                       const gchar            *marker_name);
 
 guint                 af_timeline_get_fps            (AfTimeline              *timeline);
