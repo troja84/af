@@ -1,8 +1,8 @@
 #include <gtk/gtk.h>
-#include <librsvg/rsvg.h>
-#include <librsvg/rsvg-cairo.h>
 #include <af/af-animator.h>
 #include "myslider.h"
+
+#define DURATION 1500
 
 static GtkWidget *my_slider = NULL;
 static guint id = 0;
@@ -13,21 +13,19 @@ static gchar *files[] = {"./svgs/address-book-new.svg",
 			 "./svgs/bookmark-new.svg",
 			 "./svgs/contact-new.svg"};
 
-static gdouble offset = 0;
 static guint number = 0;
-static gboolean forward = TRUE;
 
 static void load_pics (GtkWidget *widget, gchar* dir)
 {
   MySlider *slider;
-  RsvgHandle *handle;
+  GdkPixbuf *handle;
   gint x;
 
   slider = MY_SLIDER (widget);
 
   for (x = 0; x < file_number; x++)
     {
-      handle = rsvg_handle_new_from_file (files[x], NULL);
+      handle = rsvg_pixbuf_from_file (files[x], NULL);
 
       if (handle)
         {
@@ -44,9 +42,7 @@ finished_cb (guint    anim_id,
   if (id == anim_id)
     {
       id = 0;
-      offset = 0;
       number = 0;
-      forward = TRUE;
     }
 }
 
@@ -68,12 +64,10 @@ forward_cb (GtkButton *button,
       else
 	return FALSE;
 
-      forward = TRUE;
-
       id = af_animator_tween (G_OBJECT (my_slider),
-		              1000,
+		              DURATION,
 			      AF_TIMELINE_PROGRESS_LINEAR,
-			      &offset, NULL, finished_cb,
+			      NULL, NULL, finished_cb,
 			      "pic", pos + 1, my_slider_trans,
 			      NULL);
     }
@@ -86,18 +80,12 @@ forward_cb (GtkButton *button,
       else
 	return FALSE;
 
-      if (!forward)
-        {
-          forward = TRUE;
-	  offset *= -1;
-	}
-
       af_animator_remove (id);
 
       id = af_animator_tween (G_OBJECT (my_slider),
-		              1000,
+		              DURATION,
 			      AF_TIMELINE_PROGRESS_LINEAR,
-			      &offset, NULL, finished_cb,
+			      NULL, NULL, finished_cb,
 			      "pic", (gdouble)number, my_slider_trans,
 			      NULL);
     }
@@ -122,12 +110,10 @@ back_cb (GtkButton *button,
       else
 	return FALSE;
 
-      forward = FALSE;
-
       id = af_animator_tween (G_OBJECT (my_slider),
-		              1000,
+		              DURATION,
 			      AF_TIMELINE_PROGRESS_LINEAR,
-			      &offset, NULL, finished_cb,
+			      NULL, NULL, finished_cb,
 			      "pic", pos - 1, my_slider_trans,
 			      NULL);
     }
@@ -138,18 +124,12 @@ back_cb (GtkButton *button,
       else
 	return FALSE;
 
-      if (forward)
-        {
-          forward = FALSE;
-	  offset *= -1;
-	}
-
       af_animator_remove (id);
 
       id = af_animator_tween (G_OBJECT (my_slider),
-		              1000,
+		              DURATION,
 			      AF_TIMELINE_PROGRESS_LINEAR,
-			      &offset, NULL, finished_cb,
+			      NULL, NULL, finished_cb,
 			      "pic", (gdouble)number, my_slider_trans,
 			      NULL);
     }
@@ -169,7 +149,7 @@ int main( int   argc,
     dir = argv[1];
     
   window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-  gtk_window_set_default_size (GTK_WINDOW(window), 640, 480);
+  gtk_window_set_default_size (GTK_WINDOW(window), 320, 240);
 
   /* It's a good idea to do this for all windows. */
   g_signal_connect (G_OBJECT (window), "destroy",
@@ -182,7 +162,7 @@ int main( int   argc,
 
   my_slider = my_slider_new ();
 
-  gtk_widget_set_size_request (my_slider, 640, 480);
+  //gtk_widget_set_size_request (my_slider, 640, 480);
 
   load_pics (my_slider, NULL);
 

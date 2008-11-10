@@ -4,7 +4,7 @@
 
 #define ORIGIN_X 5
 #define ORIGIN_Y 5
-#define ABSZISSE -5
+#define ABSCISSA -5
 #define ORDINATE -5
 
 #define MY_CHART_GET_PRIV(obj) (G_TYPE_INSTANCE_GET_PRIVATE ((obj), MY_TYPE_CHART, MyChartPriv))
@@ -220,11 +220,15 @@ my_chart_expose (GtkWidget      *chart,
   GList *element;
 
   cairo_t *cr;
-  gint width, height;
+  gint width, height, max_width, max_height;
 
   priv = MY_CHART_GET_PRIV (chart);
 
-  gtk_widget_get_size_request (chart, &width, &height);
+  width = chart->allocation.width;
+  height = chart->allocation.height;
+
+  max_width = width + 2 * ABSCISSA;
+  max_height = height + 2 * ORDINATE;
 
   cr = gdk_cairo_create (chart->window); 
 
@@ -237,14 +241,15 @@ my_chart_expose (GtkWidget      *chart,
 
   cairo_move_to (cr, ORIGIN_X, ORIGIN_Y);
   cairo_line_to (cr, ORIGIN_X, height + ORDINATE);
-  cairo_line_to (cr, width + ABSZISSE, height + ORDINATE);
+  cairo_line_to (cr, width + ABSCISSA, height + ORDINATE);
 
   if (priv->points)
     {
       element = priv->points;
       point = (MyChartPoint *)element->data;
       
-      cairo_move_to (cr, point->x + ORIGIN_X, height - ORIGIN_Y - point->y);
+      cairo_move_to (cr, point->x * max_width + ORIGIN_X, 
+		      height - ORIGIN_Y - max_height * point->y);
 
       element = g_list_next(element);
       
@@ -252,7 +257,8 @@ my_chart_expose (GtkWidget      *chart,
         {
           point = (MyChartPoint *)element->data;
 
-          cairo_line_to (cr, point->x + ORIGIN_X, height - ORIGIN_Y - point->y);
+          cairo_line_to (cr, point->x * max_width + ORIGIN_X, 
+			  height - ORIGIN_Y - max_height * point->y);
 
           element = g_list_next (element);
 	}
@@ -316,7 +322,7 @@ my_chart_trans (const GValue *from,
 
   dl = (pto->y - pfrom->y) / 2;
 
-  res->x = 140 * progress;
+  res->x = progress;
 
   if (progress < 0.5)
       res->y = ABS((-d * dl * t_square_end * progress * progress) / m);

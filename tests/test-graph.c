@@ -7,7 +7,6 @@
 
 static GtkWidget *my_chart = NULL;
 static guint id = 0;
-static gchar *test_data = "Hallo people!";
 
 static MyChartPoint start, end;
 
@@ -25,8 +24,6 @@ static gboolean
 play_cb (GtkButton *button,
          gpointer   user_data)
 {
-  gchar *test_data_new = NULL;
-
   if (id == 0)
     {
       start.x = start.y = 0;
@@ -38,14 +35,12 @@ play_cb (GtkButton *button,
 		    NULL);
 
       end.x = 0;
-      end.y = HEIGHT - 10;
+      end.y = 1;
 
-      test_data_new = g_strdup (test_data);
-      
       id = af_animator_tween (G_OBJECT (my_chart),
 		              2000,
 			      AF_TIMELINE_PROGRESS_LINEAR,
-			      test_data_new, g_free, free_id,
+			      NULL, NULL, free_id,
 			      "point", &end, my_chart_trans,
 			      NULL);
     }
@@ -85,7 +80,7 @@ int main( int   argc,
   box = gtk_vbox_new (FALSE, 0);
 
   my_chart = my_chart_new ();
-  gtk_widget_set_size_request (my_chart, 320, 240);
+  //gtk_widget_set_size_request (my_chart, 320, 240);
   gtk_box_pack_start (GTK_BOX (box), my_chart, TRUE, TRUE, 0);
 
   bbox = gtk_hbutton_box_new ();
