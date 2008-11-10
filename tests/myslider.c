@@ -220,7 +220,7 @@ my_slider_expose (GtkWidget      *slider,
 
   pic1_buf = (GdkPixbuf *) g_list_nth (priv->pics, pos1)->data;
 
-  scale_factor = height / 2 / gdk_pixbuf_get_width (pic1_buf);
+  scale_factor = height / 2.0 / gdk_pixbuf_get_width (pic1_buf);
   pic1 = gdk_pixbuf_scale_simple (pic1_buf,
 				  gdk_pixbuf_get_width (pic1_buf) * scale_factor,
 		                  height / 2,
@@ -231,7 +231,7 @@ my_slider_expose (GtkWidget      *slider,
 
   pic2_buf = (GdkPixbuf *) g_list_nth (priv->pics, pos2)->data;
 
-  scale_factor = height / 2 / gdk_pixbuf_get_width (pic2_buf);
+  scale_factor = height / 2.0 / gdk_pixbuf_get_width (pic2_buf);
   pic2 = gdk_pixbuf_scale_simple (pic2_buf,
 				  gdk_pixbuf_get_width (pic2_buf) * scale_factor,
 		                  height / 2,

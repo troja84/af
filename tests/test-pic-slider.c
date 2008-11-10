@@ -7,31 +7,77 @@
 static GtkWidget *my_slider = NULL;
 static guint id = 0;
 
-static gint file_number = 4;
-static gchar *files[] = {"./svgs/address-book-new.svg",
-	                 "./svgs/appointment-new.svg",
-			 "./svgs/bookmark-new.svg",
-			 "./svgs/contact-new.svg"};
-
 static guint number = 0;
+static gboolean path = FALSE;
 
 static void load_pics (GtkWidget *widget, gchar* dir)
 {
   MySlider *slider;
+  GFile *path;
+  GFileEnumerator *iter;
+  GFileInfo *file;
   GdkPixbuf *handle;
-  gint x;
+  GError *err;
+  const gchar *filename;
+  gchar *filepath;
 
   slider = MY_SLIDER (widget);
 
-  for (x = 0; x < file_number; x++)
+  g_assert (dir != NULL);
+
+  handle = NULL;
+  err = NULL;
+
+  path = g_file_new_for_path (dir);
+  iter = g_file_enumerate_children (path, "standard::name", 
+		                    G_FILE_QUERY_INFO_NONE,
+				    NULL,
+				    &err);
+
+  if (err != NULL)
     {
-      handle = rsvg_pixbuf_from_file (files[x], NULL);
+      g_error ("Failure while opening path '%s'", dir);
+      g_error_free (err); 
+    }
+
+  file = g_file_enumerator_next_file (iter, NULL, &err);
+
+  if (err != NULL)
+    {
+      g_error ("Failure while opening path '%s'", dir);
+      g_error_free (err); 
+    }
+
+  while (file)
+    {
+      filename = g_file_info_get_name (file); 
+
+      filepath = g_strconcat (dir, filename, NULL);
+
+      // printf ("FILE: %s\n", filename);
+
+      handle = gdk_pixbuf_new_from_file (filepath, &err);
+
+      g_free (filepath);
+
+      if (err != NULL)
+        {
+          g_error ("Failure while loading picture '%s' - %s'", filename,
+		   err->message);
+          g_error_free (err); 
+        }
 
       if (handle)
+        my_slider_add_picture (slider, handle);
+
+      handle = NULL;
+      file = g_file_enumerator_next_file (iter, NULL, &err);
+
+      if (err != NULL)
         {
-          // printf ("Picture %s\n", files[x]);
-          my_slider_add_picture (slider, handle);
-	}
+          g_error ("Failure while opening file '%s'", filename);
+          g_error_free (err); 
+        }
     }
 }
 
@@ -141,12 +187,26 @@ int main( int   argc,
           char *argv[] )
 {
   GtkWidget *window, *box, *bbox, *button;
+  GOptionContext *context;
+  GError *err;
   gchar *dir = NULL;
     
   gtk_init (&argc, &argv);
 
+  context = g_option_context_new ("PATH - a picture slider app");
+  g_option_context_set_help_enabled (context, TRUE);
+
+  if (!g_option_context_parse (context, &argc, &argv, &err))
+    {
+      g_print ("option parsing failed: %s\n", err->message);
+    }
+  
   if (argc > 1)
-    dir = argv[1];
+    {
+      dir = argv[1];
+    }
+  else
+    g_error ("No path to a picture directory given!");
     
   window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
   gtk_window_set_default_size (GTK_WINDOW(window), 320, 240);
@@ -164,7 +224,7 @@ int main( int   argc,
 
   //gtk_widget_set_size_request (my_slider, 640, 480);
 
-  load_pics (my_slider, NULL);
+  load_pics (my_slider, dir);
 
   gtk_box_pack_start (GTK_BOX (box), my_slider, TRUE, TRUE, 0);
 
