@@ -7,77 +7,85 @@
 static GtkWidget *my_slider = NULL;
 static guint id = 0;
 
-static guint number = 0;
-static gboolean path = FALSE;
+static gint number = 0;
 
-static void load_pics (GtkWidget *widget, gchar* dir)
+static void error_handling (GError *err)
+{
+  if (err == NULL)
+    return;
+
+  switch (err->code)
+    {
+      case G_IO_ERROR_NOT_FOUND:
+	g_error ("IO error occured!\n");
+        break;
+      case G_FILE_ERROR_NOTDIR:
+	g_error ("The given path doesn't direct to a directory!\n");
+	break;
+      default:
+	g_error ("Unknown error occured!\n");
+    }
+
+  g_free (err);
+}
+
+static void load_pics (GtkWidget *widget, GFile *path)
 {
   MySlider *slider;
-  GFile *path;
   GFileEnumerator *iter;
-  GFileInfo *file;
+  GFileInfo *file_info;
+  GFile *file;
   GdkPixbuf *handle;
   GError *err;
-  const gchar *filename;
   gchar *filepath;
 
   slider = MY_SLIDER (widget);
 
-  g_assert (dir != NULL);
+  g_assert (path != NULL);
 
   handle = NULL;
   err = NULL;
 
-  path = g_file_new_for_path (dir);
-  iter = g_file_enumerate_children (path, "standard::name", 
+  iter = g_file_enumerate_children (path, "standard::name, standard::type", 
 		                    G_FILE_QUERY_INFO_NONE,
 				    NULL,
 				    &err);
 
-  if (err != NULL)
+  error_handling (err);
+
+  file_info = g_file_enumerator_next_file (iter, NULL, &err);
+
+  error_handling (err);
+
+  while (file_info)
     {
-      g_error ("Failure while opening path '%s'", dir);
-      g_error_free (err); 
-    }
+      file = g_file_get_child (path, g_file_info_get_name (file_info));
 
-  file = g_file_enumerator_next_file (iter, NULL, &err);
+      filepath = g_file_get_path (file);
 
-  if (err != NULL)
-    {
-      g_error ("Failure while opening path '%s'", dir);
-      g_error_free (err); 
-    }
-
-  while (file)
-    {
-      filename = g_file_info_get_name (file); 
-
-      filepath = g_strconcat (dir, filename, NULL);
-
-      // printf ("FILE: %s\n", filename);
+      /*
+      printf ("FILE: %s - PATH: %s\n", 
+	      g_file_info_get_name (file_info), filepath);
+      */
 
       handle = gdk_pixbuf_new_from_file (filepath, &err);
 
       g_free (filepath);
-
-      if (err != NULL)
-        {
-          g_error ("Failure while loading picture '%s' - %s'", filename,
-		   err->message);
-          g_error_free (err); 
-        }
+      g_object_unref (file);
+      
+      error_handling (err);
 
       if (handle)
-        my_slider_add_picture (slider, handle);
+        {
+          my_slider_add_picture (slider, handle);
+	  g_object_unref (handle);
+	}
 
       handle = NULL;
-      file = g_file_enumerator_next_file (iter, NULL, &err);
 
-      if (err != NULL)
-        {
-          g_error ("Failure while opening file '%s'", filename);
-          g_error_free (err); 
-        }
+      file_info = g_file_enumerator_next_file (iter, NULL, &err);
+
+      error_handling (err);
     }
 }
 
@@ -166,7 +174,7 @@ back_cb (GtkButton *button,
   else
     {
       if (0 <= number - 1)
-        number--;
+	number--;
       else
 	return FALSE;
 
@@ -189,7 +197,7 @@ int main( int   argc,
   GtkWidget *window, *box, *bbox, *button;
   GOptionContext *context;
   GError *err;
-  gchar *dir = NULL;
+  GFile *path;
     
   gtk_init (&argc, &argv);
 
@@ -203,10 +211,13 @@ int main( int   argc,
   
   if (argc > 1)
     {
-      dir = argv[1];
+      path = g_file_new_for_commandline_arg (argv[1]);
     }
   else
-    g_error ("No path to a picture directory given!");
+    {
+      printf ("Run with -h or --help to see further options!\n");
+      return 0;
+    }
     
   window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
   gtk_window_set_default_size (GTK_WINDOW(window), 320, 240);
@@ -224,7 +235,7 @@ int main( int   argc,
 
   //gtk_widget_set_size_request (my_slider, 640, 480);
 
-  load_pics (my_slider, dir);
+  load_pics (my_slider, path);
 
   gtk_box_pack_start (GTK_BOX (box), my_slider, TRUE, TRUE, 0);
 
