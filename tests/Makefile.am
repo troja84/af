@@ -2,12 +2,10 @@ INCLUDES = \
 	-Wall \
 	-g \
 	-I$(top_srcdir) \
-	$(AF_CFLAGS) \
-	-I/usr/include/librsvg-2
+	$(AF_CFLAGS)
 LDADDS = \
 	$(top_srcdir)/af/libanimation-framework-1.la\
-	$(AF_LIBS) \
-	-lrsvg-2
+	$(AF_LIBS)
 
 noinst_PROGRAMS = \
 	test-pic-slider\

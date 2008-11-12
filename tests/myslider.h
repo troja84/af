@@ -3,7 +3,6 @@
 
 #include <glib-object.h>
 #include <gtk/gtk.h>
-#include <librsvg/rsvg.h>
 
 #define MY_TYPE_SLIDER                        (my_slider_get_type ())
 #define MY_SLIDER(obj)                        (G_TYPE_CHECK_INSTANCE_CAST ((obj), MY_TYPE_SLIDER, MySlider))

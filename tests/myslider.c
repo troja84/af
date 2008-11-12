@@ -1,7 +1,5 @@
 #include <gtk/gtk.h>
 #include <glib-object.h>
-#include <librsvg/rsvg.h>
-#include <librsvg/rsvg-cairo.h>
 #include <math.h>
 
 #include "myslider.h"
@@ -16,15 +14,15 @@ struct MyPixbufContainer
   GdkPixbuf *org;
   GdkPixbuf *cur;
 
-  gint width, height;
+  gint width, height, cur_width, cur_height;
 };
 
 struct MySliderPriv
 {
-  gint   current;
+  gint counter;
   gdouble position;
 
-  GList *pics;
+  GHashTable *pics;
 };
 
 enum 
@@ -47,12 +45,11 @@ static void my_slider_finalize         (GObject *object);
 static gboolean my_slider_expose       (GtkWidget      *chart,
 		                        GdkEventExpose *event);
 
-static void my_slider_free_pic         (gpointer data,
-		                        gpointer user_data);
+static void my_slider_free_pic         (gpointer data);
 
-static GdkPixbuf* resize               (GdkPixbuf *org,
-	                                guint      width,
-	                                guint      height);
+static void resize                     (MyPixbufContainer *con,
+	                                gint              *width,
+	                                gint              *height);
 
 G_DEFINE_TYPE (MySlider, my_slider, GTK_TYPE_DRAWING_AREA);
 	
@@ -90,8 +87,118 @@ my_slider_init (MySlider *slider)
 
   priv = MY_SLIDER_GET_PRIV (slider);
 
-  priv->pics = NULL;
+  priv->counter = -1;
+  priv->pics = g_hash_table_new_full (g_direct_hash, 
+		                      g_direct_equal, 
+				      NULL,
+				      my_slider_free_pic);
   priv->position = 0;
+}
+
+static void
+define_clip_rect (MySlider     *slider,
+		  GdkRectangle *rect,
+		  gdouble      *old_position,
+		  gdouble      *new_position)
+{
+  GtkWidget *widget;
+  MySliderPriv *priv;
+  MyPixbufContainer *con1, *con2;
+  gdouble o_progress, n_progress, o_offset, n_offset, h_width, d_pos1, d_pos2;
+  gint width, height, pos1, pos2;
+
+  widget = GTK_WIDGET (slider);
+  priv = MY_SLIDER_GET_PRIV (slider);
+
+  o_progress = *old_position - (gint)*old_position;
+  n_progress = *new_position - (gint)*new_position;
+
+  width = widget->allocation.width;
+  height = widget->allocation.height;
+
+  if (n_progress == 0 || o_progress == 0)
+    {
+      rect->x = rect->y = 0;
+      rect->width = width;
+      rect->height = height;
+
+      return;
+    }
+
+  pos1 = (gint) ceil (priv->position);
+  pos2 = (gint) floor (priv->position);
+
+  con1 = (MyPixbufContainer *) g_hash_table_lookup (priv->pics, GINT_TO_POINTER (pos1));
+  con2 = (MyPixbufContainer *) g_hash_table_lookup (priv->pics, GINT_TO_POINTER (pos2));
+
+  o_offset = (gdouble) width * o_progress;
+  n_offset = (gdouble) width * n_progress;
+  h_width = (gdouble) width / 2.0;
+
+  rect->y = (gdouble) height / 4.0;
+
+  if (pos1 < 0)
+    pos1 = priv->counter - 1;
+
+  if (pos2 >  priv->counter - 1)
+    pos2 = 0;
+
+  d_pos1 = h_width - (gdouble) con1->cur_width / 2.0;
+  d_pos2 = h_width - (gdouble) con2->cur_width / 2.0;
+
+  rect->height = con1->cur_height;
+
+  if (o_progress < n_progress)
+    {
+      if (o_offset + d_pos2 <= con2->width && o_offset - d_pos1 + con1->cur_width >= 0)
+        {
+          rect->x = o_offset - d_pos1 - con1->cur_width;
+          rect->width = n_offset + d_pos2 + con2->cur_width; 
+
+	  if (rect->x < 0)
+	    rect->x = 0;
+	}
+      else if (o_offset + d_pos2 < con2->width)
+        {
+          rect->x = o_offset + d_pos2;
+          rect->width = n_offset + con2->cur_width; 
+	}
+      else if (o_offset - d_pos1 + con1->cur_width >= 0)
+        {
+          rect->x = o_offset - d_pos1 - con1->cur_width;
+          rect->width = n_offset + con1->cur_width; 
+	}
+    }
+  else
+    {
+      if (o_offset + d_pos2 <= con2->width && o_offset - d_pos1 + con1->cur_width >= 0)
+        {
+          rect->x = n_offset - d_pos1 - con1->cur_width;
+          rect->width = o_offset + d_pos2 + con2->cur_width; 
+
+	  if (rect->x < 0)
+	    rect->x = 0;
+	}
+      else if (o_offset + d_pos2 < con2->width)
+        {
+          rect->x = n_offset + d_pos2;
+          rect->width = o_offset + d_pos2 + con2->cur_width; 
+	}
+      else if (o_offset - d_pos1 + con1->cur_width >= 0)
+        {
+          rect->x = n_offset - d_pos1 - con1->cur_width;
+          rect->width = o_offset + con1->cur_width; 
+	}
+    }
+
+
+  rect->height = (con1->cur_height > con2->cur_height) 
+	         ? con1->cur_height : con2->cur_height;
+
+  /*
+  printf ("POGRESS: %f RECT: X: %d Y: %d WIDTH: %d HEIGHT: %d\n",
+	  o_progress, rect->x, rect->y, rect->width, rect->height);
+  */
 }
 
 void
@@ -103,28 +210,33 @@ my_slider_set_property (GObject      *object,
   MySlider *slider;
   MySliderPriv *priv;
   gint length;
-  gdouble dvalue;
+  gdouble d_value;
 
   slider = MY_SLIDER (object);
   priv = MY_SLIDER_GET_PRIV (slider);
 
-  length = g_list_length (priv->pics);
+  length = priv->counter;
 
   switch (prop_id)
     {
       case PROP_PIC_POSITION:
-	dvalue = g_value_get_double (value);
-	if (!length || dvalue > length - 1 || dvalue < 0)
+	d_value = g_value_get_double (value);
+	if (!length || d_value > length - 1 || d_value < 0)
 	  return;
-
-	priv->position = dvalue;
 
         if (GTK_WIDGET_DRAWABLE (GTK_WIDGET (slider)) == TRUE)
           { 
+	    GdkRectangle rect;
+
+            define_clip_rect (slider, &rect, &priv->position, &d_value);
+
+	    priv->position = d_value;
+
             gdk_window_invalidate_rect (GTK_WIDGET (slider)->window, 
- 		                        NULL, TRUE);
+ 		                        &rect, FALSE);
           }
 
+	priv->position = d_value;
 	break;
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -162,8 +274,7 @@ my_slider_finalize (GObject *object)
   slider = MY_SLIDER (object);
   priv = MY_SLIDER_GET_PRIV (slider);
 
-  g_list_foreach (priv->pics, my_slider_free_pic, NULL);
-  g_list_free (priv->pics);
+  g_hash_table_unref (priv->pics);
 }
 
 GtkWidget *
@@ -192,11 +303,13 @@ my_slider_add_picture (MySlider  *slider,
   con->height = widget->allocation.height;
 
   if (con->width > 1 && con->height > 1)
-    con->cur = resize (picture, con->width, con->height);
+    resize (con, &con->width, &con->height);
   else
     con->cur = NULL;
 
-  priv->pics = g_list_append (priv->pics, con);
+  priv->counter++;
+  
+  g_hash_table_insert (priv->pics, GINT_TO_POINTER (priv->counter), con);
 }
 
 guint
@@ -206,7 +319,7 @@ my_slider_picture_count (MySlider *slider)
 
   priv = MY_SLIDER_GET_PRIV (slider);
 
-  return g_list_length (priv->pics);
+  return g_hash_table_size (priv->pics);
 }
 
 static gboolean
@@ -214,32 +327,22 @@ my_slider_expose (GtkWidget      *slider,
 		  GdkEventExpose *event)
 {
   MySliderPriv *priv;
-  GdkGC *gc;
   MyPixbufContainer *con;
-  GdkPixbuf *pic1, *pic2;
-  gdouble pos_pic1, pos_pic2, progress, offset, scale_factor;
+  GdkGC * gc;
+  GdkPixbuf *pic;
+  gdouble h_width, f_height, pos, progress, offset;
   gint pos1, pos2;
   gint width, height;
 
   priv = MY_SLIDER_GET_PRIV (slider);
 
-  if (g_list_length (priv->pics) == 0)
+  if (priv->counter < 0)
     return FALSE;
 
   width = slider->allocation.width;
   height = slider->allocation.height;
 
-  /* set a clip region for the expose event */
-  if (event)
-    {
-      gc = gdk_gc_new (slider->window);
-      gdk_gc_set_clip_rectangle (gc, &event->area);
-    }
-  else
-    gc = NULL;
-
-  pic1 = pic2 = NULL;
-  pos_pic1 = pos_pic2 = 0.0;
+  gc = NULL;
 
   progress = priv->position - (gint)priv->position;
 
@@ -247,95 +350,60 @@ my_slider_expose (GtkWidget      *slider,
   pos2 = (gint) floor (priv->position);
 
   offset = (gdouble) width * progress;
-  scale_factor = height / 2.0;
+  h_width = (gdouble) width / 2.0;
+  f_height = (gdouble) height / 4.0;
+
+  if (event)
+    {
+      gc = gdk_gc_new (slider->window);
+      gdk_gc_set_clip_rectangle (gc, &event->area);
+    }
 
   if (pos1 != pos2) 
     {
-
       if (pos1 < 0)
-        pos1 = g_list_length (priv->pics) - 1;
+        pos1 = priv->counter - 1;
 
-      con = (MyPixbufContainer *) g_list_nth (priv->pics, pos1)->data;
+      con = (MyPixbufContainer *) g_hash_table_lookup (priv->pics, GINT_TO_POINTER (pos1));
 
-      if (con->width == width && con->height == height && con->cur)
-        pic1 = con->cur;
-      else
+      if (con->width != width || con->height != height)
         {
-          if (con->cur)
-            {
-              g_object_unref (con->cur);
-              con->cur = NULL;
-	    }
-
-          con->cur = resize (con->org, width, height);
-          con->width = width;
-          con->height = height;
-
-          pic1 = con->cur;
+          resize (con, &width, &height);
         }
+
+      pos = offset - h_width - (gdouble) con->cur_width / 2.0;
+
+      gdk_draw_pixbuf (slider->window, gc, con->cur,
+		       0, 0,
+		       pos, f_height,
+		       -1, -1,
+		       GDK_RGB_DITHER_NONE, 0, 0);
     }
   
-  if (pos2 > g_list_length (priv->pics) - 1)
+  if (pos2 >  priv->counter - 1)
     pos2 = 0;
 
-  con = (MyPixbufContainer *) g_list_nth (priv->pics, pos2)->data;
+  con = (MyPixbufContainer *) g_hash_table_lookup (priv->pics, GINT_TO_POINTER (pos2));
 
-  if (con->width == width && con->height == height && con->cur)
-    pic2 = con->cur;
-  else
+  if (con->width != width || con->height != height)
     {
-      if (con->cur)
-        {
-          g_object_unref (con->cur);
-          con->cur = NULL;
-	}
-
-      con->cur = resize (con->org, width, height);
-      con->width = width;
-      con->height = height;
-
-      pic2 = con->cur;
+      resize (con, &width, &height);
+      pic = con->cur;
     }
+
+  pos = offset + h_width - (gdouble) con->cur_width / 2.0;
   
-
-  if (pic1)
-    {
-      gdouble pic_width = gdk_pixbuf_get_width (pic1);
-
-      pos_pic1 = offset - ((gdouble) width / 2.0 + pic_width / 2.0);
-    }
-
-  if (pic2)
-    {
-      gdouble pic_width = gdk_pixbuf_get_width (pic2);
-
-      pos_pic2 = offset + ((gdouble) width / 2.0 - pic_width / 2.0);
-    }
-
-  if (pic1)
-    {
-      gdk_draw_pixbuf (slider->window, gc, pic1,
-		       0, 0,
-		       pos_pic1, 0,
-		       -1, -1,
-		       GDK_RGB_DITHER_NONE, 0, 0);
-    }
-
-  if (pic2)
-    {
-      gdk_draw_pixbuf (slider->window, gc, pic2,
-		       0, 0,
-		       pos_pic2, 0,
-		       -1, -1,
-		       GDK_RGB_DITHER_NONE, 0, 0);
-    }
+  gdk_draw_pixbuf (slider->window, gc, con->cur,
+		   0, 0,
+		   pos, f_height,
+		   -1, -1,
+		   GDK_RGB_DITHER_NONE, 0, 0);
 
   return FALSE;
 }
 
 static void 
-my_slider_free_pic (gpointer data,
-		    gpointer user_data)
+my_slider_free_pic (gpointer data)
 {
   MyPixbufContainer *con;
 
@@ -349,19 +417,45 @@ my_slider_free_pic (gpointer data,
   g_slice_free (MyPixbufContainer, con);
 }
 
-static GdkPixbuf*
-resize (GdkPixbuf *org,
-	guint      width,
-	guint      height)
+static void
+resize (MyPixbufContainer *con,
+	gint              *width,
+	gint              *height)
 {
-  guint n_width; 
-  gdouble p_width;
+  gint n_width, n_height;
+  gdouble factor;
 
-  p_width = gdk_pixbuf_get_width (org);
-  n_width = p_width * (gdouble) height / 2.0 / p_width;
+  factor = (gdouble) gdk_pixbuf_get_width (con->org) 
+	  / gdk_pixbuf_get_height (con->org);
 
-  return gdk_pixbuf_scale_simple (org, n_width, height / 2,
-				  GDK_INTERP_BILINEAR);
+  if (con->cur)
+    {
+      g_object_unref (con->cur);
+      con->cur = NULL;
+    }
+
+  if ((gdouble)*width / *height >= 1 || factor < 1)
+    {
+      n_height = *height / 2;
+      n_width = ((gdouble)*height / 2.0) * factor;
+    }
+  else
+    {
+      factor = 1 / factor;
+
+      n_width = *width;
+      n_height = (gdouble) *width * factor;
+    }
+
+  con->cur = gdk_pixbuf_scale_simple (con->org,
+                                      n_width, n_height,
+				      GDK_INTERP_BILINEAR);
+
+  con->cur_width = n_width;
+  con->cur_height = n_height;
+
+  con->width = *width;
+  con->height = *height;
 }
 
 /* Animation stuff */
