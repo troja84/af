@@ -5,7 +5,8 @@ INCLUDES = \
 	$(AF_CFLAGS)
 LDADDS = \
 	$(top_srcdir)/af/libanimation-framework-1.la\
-	$(AF_LIBS)
+	$(AF_LIBS) \
+	-lgthread-2.0
 
 noinst_PROGRAMS = \
 	test-pic-slider\

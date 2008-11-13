@@ -2,10 +2,12 @@
 #include <af/af-animator.h>
 #include "myslider.h"
 
-#define DURATION 1500
+#define DURATION 2500
 
 static GtkWidget *my_slider = NULL;
 static guint id = 0;
+
+static GThreadPool *load_pictures;
 
 static gint number = 0;
 
@@ -29,17 +31,19 @@ static void error_handling (GError *err)
   g_free (err);
 }
 
-static void load_pics (GtkWidget *widget, GFile *path)
+static void load_pics (gpointer data, 
+		       gpointer user_data)
 {
   MySlider *slider;
   GFileEnumerator *iter;
   GFileInfo *file_info;
-  GFile *file;
+  GFile *path, *file;
   GdkPixbuf *handle;
   GError *err;
   gchar *filepath;
 
-  slider = MY_SLIDER (widget);
+  slider = MY_SLIDER (user_data);
+  path = (GFile*)data;
 
   g_assert (path != NULL);
 
@@ -233,9 +237,16 @@ int main( int   argc,
 
   my_slider = my_slider_new ();
 
-  //gtk_widget_set_size_request (my_slider, 640, 480);
+  if (!g_thread_supported ()) 
+    {
+      g_thread_init (NULL);
+    }
+  
+  load_pictures = g_thread_pool_new (load_pics,
+		                     my_slider,
+				     -1, FALSE, NULL);
 
-  load_pics (my_slider, path);
+  g_thread_pool_push (load_pictures, path, NULL);
 
   gtk_box_pack_start (GTK_BOX (box), my_slider, TRUE, TRUE, 0);
 
