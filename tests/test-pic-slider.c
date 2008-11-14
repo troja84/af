@@ -3,13 +3,17 @@
 #include "myslider.h"
 
 #define DURATION 2500
+#define PROG_LIMIT 0.35
+#define PROG_TYPE AF_TIMELINE_PROGRESS_EASE_IN_EASE_OUT
 
 static GtkWidget *my_slider = NULL;
 static guint id = 0;
+static AfTransition *trans = NULL;
 
 static GThreadPool *load_pictures;
 
 static gint number = 0;
+static gboolean forward = TRUE;
 
 static void error_handling (GError *err)
 {
@@ -99,8 +103,7 @@ finished_cb (guint    anim_id,
 {
   if (id == anim_id)
     {
-      id = 0;
-      number = 0;
+      id = number = 0;
     }
 }
 
@@ -118,19 +121,31 @@ forward_cb (GtkButton *button,
 
       if (my_slider_picture_count (MY_SLIDER (my_slider))
 	  > pos + 1)
-        number = pos + 1;
+        {
+          number = (gint) pos + 1;
+	}
       else
 	return FALSE;
 
-      id = af_animator_tween (G_OBJECT (my_slider),
-		              DURATION,
-			      AF_TIMELINE_PROGRESS_LINEAR,
-			      NULL, NULL, finished_cb,
-			      "pic", pos + 1, my_slider_trans,
-			      NULL);
+      id = af_animator_add ();
+
+      af_animator_set_finished_notify (id, finished_cb);
+
+      trans = af_animator_add_transition (id, 0, 1,
+					  PROG_TYPE,
+					  G_OBJECT (my_slider),
+					  "pic", pos + 1, my_slider_trans,
+					  NULL);
+
+      af_animator_start (id, DURATION);
+
+      forward = TRUE;
     }
   else
     {
+      gdouble progress;
+
+      progress = 0;
 
       if (my_slider_picture_count (MY_SLIDER (my_slider))
 	  > number + 1)
@@ -138,14 +153,27 @@ forward_cb (GtkButton *button,
       else
 	return FALSE;
 
-      af_animator_remove (id);
+      progress = af_animator_pause (id);
 
-      id = af_animator_tween (G_OBJECT (my_slider),
-		              DURATION,
-			      AF_TIMELINE_PROGRESS_LINEAR,
-			      NULL, NULL, finished_cb,
-			      "pic", (gdouble)number, my_slider_trans,
-			      NULL);
+      af_animator_remove_transition (id, trans);
+
+      trans = af_animator_add_transition (id, 0, 1,
+					  PROG_TYPE,
+					  G_OBJECT (my_slider),
+					  "pic", (gdouble)number, my_slider_trans,
+					  NULL);
+
+      if (forward == TRUE)
+        {
+          if (progress > 1 - PROG_LIMIT)
+            progress = PROG_LIMIT;
+	}
+      else
+	progress = 1 - progress; 
+
+      af_animator_resume_with_progress (id, progress);
+
+      forward = TRUE;
     }
 
   return FALSE;
@@ -168,28 +196,52 @@ back_cb (GtkButton *button,
       else
 	return FALSE;
 
-      id = af_animator_tween (G_OBJECT (my_slider),
-		              DURATION,
-			      AF_TIMELINE_PROGRESS_LINEAR,
-			      NULL, NULL, finished_cb,
-			      "pic", pos - 1, my_slider_trans,
-			      NULL);
+      id = af_animator_add ();
+
+      af_animator_set_finished_notify (id, finished_cb);
+
+      trans = af_animator_add_transition (id, 0, 1,
+					  PROG_TYPE,
+					  G_OBJECT (my_slider),
+					  "pic", pos - 1, my_slider_trans,
+					  NULL);
+
+      af_animator_start (id, DURATION);
+
+      forward = FALSE;
     }
   else
     {
+      gdouble progress;
+
+      progress = 0;
+
       if (0 <= number - 1)
 	number--;
       else
 	return FALSE;
 
-      af_animator_remove (id);
+      progress = af_animator_pause (id);
 
-      id = af_animator_tween (G_OBJECT (my_slider),
-		              DURATION,
-			      AF_TIMELINE_PROGRESS_LINEAR,
-			      NULL, NULL, finished_cb,
-			      "pic", (gdouble)number, my_slider_trans,
-			      NULL);
+      af_animator_remove_transition (id, trans);
+
+      trans = af_animator_add_transition (id, 0, 1,
+					  PROG_TYPE,
+					  G_OBJECT (my_slider),
+					  "pic", (gdouble)number, my_slider_trans,
+					  NULL);
+
+      if (forward == FALSE)
+        {
+          if (progress > 1 - PROG_LIMIT)
+            progress = PROG_LIMIT;
+	}
+      else
+	progress = 1 - progress; 
+
+      af_animator_resume_with_progress (id, progress);
+
+      forward = FALSE;
     }
 
   return FALSE;
@@ -205,7 +257,7 @@ int main( int   argc,
     
   gtk_init (&argc, &argv);
 
-  context = g_option_context_new ("PATH - a picture slider app");
+  context = g_option_context_new ("PATH - a Picture slider app");
   g_option_context_set_help_enabled (context, TRUE);
 
   if (!g_option_context_parse (context, &argc, &argv, &err))

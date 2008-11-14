@@ -137,12 +137,6 @@ define_clip_rect (MySlider     *slider,
 
   rect->y = (gdouble) height / 4.0;
 
-  if (pos1 < 0)
-    pos1 = priv->counter - 1;
-
-  if (pos2 >  priv->counter - 1)
-    pos2 = 0;
-
   d_pos1 = h_width - (gdouble) con1->cur_width / 2.0;
   d_pos2 = h_width - (gdouble) con2->cur_width / 2.0;
 
@@ -194,11 +188,6 @@ define_clip_rect (MySlider     *slider,
 
   rect->height = (con1->cur_height > con2->cur_height) 
 	         ? con1->cur_height : con2->cur_height;
-
-  /*
-  printf ("POGRESS: %f RECT: X: %d Y: %d WIDTH: %d HEIGHT: %d\n",
-	  o_progress, rect->x, rect->y, rect->width, rect->height);
-  */
 }
 
 void
@@ -215,13 +204,13 @@ my_slider_set_property (GObject      *object,
   slider = MY_SLIDER (object);
   priv = MY_SLIDER_GET_PRIV (slider);
 
-  length = priv->counter;
+  length = priv->counter + 1;
 
   switch (prop_id)
     {
       case PROP_PIC_POSITION:
 	d_value = g_value_get_double (value);
-	if (!length || d_value > length - 1 || d_value < 0)
+	if (d_value > length - 1 || d_value <= 0)
 	  return;
 
         if (GTK_WIDGET_DRAWABLE (GTK_WIDGET (slider)) == TRUE)
@@ -361,9 +350,6 @@ my_slider_expose (GtkWidget      *slider,
 
   if (pos1 != pos2) 
     {
-      if (pos1 < 0)
-        pos1 = priv->counter - 1;
-
       con = (MyPixbufContainer *) g_hash_table_lookup (priv->pics, GINT_TO_POINTER (pos1));
 
       if (con->width != width || con->height != height)
@@ -380,9 +366,6 @@ my_slider_expose (GtkWidget      *slider,
 		       GDK_RGB_DITHER_NONE, 0, 0);
     }
   
-  if (pos2 >  priv->counter - 1)
-    pos2 = 0;
-
   con = (MyPixbufContainer *) g_hash_table_lookup (priv->pics, GINT_TO_POINTER (pos2));
 
   if (con->width != width || con->height != height)
