@@ -471,29 +471,29 @@ af_timeline_start (AfTimeline *timeline)
           priv->marker_position = priv->marker_list;
         }
 
-    /* sanity check */
-    g_assert (priv->fps > 0);
+      /* sanity check */
+      g_assert (priv->fps > 0);
 
-    if (priv->screen)
-      {
-        settings = gtk_settings_get_for_screen (priv->screen);
-        g_object_get (settings, "gtk-enable-animations", &enable_animations, NULL);
-      }
+      if (priv->screen)
+        {
+          settings = gtk_settings_get_for_screen (priv->screen);
+          g_object_get (settings, "gtk-enable-animations", &enable_animations, NULL);
+        }
 
-    priv->animations_enabled = (enable_animations == TRUE);
+      priv->animations_enabled = (enable_animations == TRUE);
 
-    g_signal_emit (timeline, signals [STARTED], 0);
+      g_signal_emit (timeline, signals [STARTED], 0);
     
-    marker_emit_signals (timeline, 0, TRUE);
+      marker_emit_signals (timeline, 0, TRUE);
 
-    if (enable_animations)
-      priv->source_id = gdk_threads_add_timeout (FRAME_INTERVAL (priv->fps),
-                                                 (GSourceFunc) af_timeline_run_frame,
+      if (enable_animations)
+        priv->source_id = gdk_threads_add_timeout (FRAME_INTERVAL (priv->fps),
+                                                   (GSourceFunc) af_timeline_run_frame,
                                                  timeline);
-    else
-      priv->source_id = gdk_threads_add_idle ((GSourceFunc) af_timeline_run_frame,
-                                            timeline);
-  }
+      else
+        priv->source_id = gdk_threads_add_idle ((GSourceFunc) af_timeline_run_frame,
+                                                timeline);
+    }
 }
 
 /**
@@ -602,11 +602,10 @@ af_timeline_advance (AfTimeline *timeline,
 
   priv = AF_TIMELINE_GET_PRIV (timeline);
 
-  if ((priv->direction == AF_TIMELINE_DIRECTION_FORWARD &&
+  g_return_if_fail ((priv->direction == AF_TIMELINE_DIRECTION_FORWARD &&
       priv->last_progress >= progress) || 
       (priv->direction == AF_TIMELINE_DIRECTION_BACKWARD &&
-      priv->last_progress <= progress))
-    return;
+      priv->last_progress <= progress));
 
   /* enter critical section */
   g_static_mutex_lock (&priv->progress_mutex);
@@ -617,7 +616,6 @@ af_timeline_advance (AfTimeline *timeline,
 
   g_static_mutex_unlock (&priv->progress_mutex);
   /* leave critical section */
-
 }
 
 /**
@@ -639,9 +637,37 @@ af_timeline_get_progress (AfTimeline *timeline)
   timer_elapsed = 0.0;
 
   if (priv->timer)
-    timer_elapsed = g_timer_elapsed (priv->timer, NULL) * 1000;
+    timer_elapsed = (g_timer_elapsed (priv->timer, NULL) * 1000) 
+	            / priv->duration;
 
   return priv->last_progress + timer_elapsed;
+}
+
+void
+af_timeline_set_progress (AfTimeline *timeline,
+		          gdouble     progress)
+{
+  AfTimelinePriv *priv;
+  gdouble timer_elapsed;
+
+  g_return_if_fail (AF_IS_TIMELINE (timeline));
+  g_return_if_fail (progress >= 0 && progress <= 1);
+
+  priv = AF_TIMELINE_GET_PRIV (timeline);
+
+  timer_elapsed = 0.0;
+  
+  /* enter critical section */
+  g_static_mutex_lock (&priv->progress_mutex);
+
+  if (priv->timer)
+    timer_elapsed = (g_timer_elapsed (priv->timer, NULL) * 1000) 
+	            / priv->duration;
+
+  priv->last_progress = progress - timer_elapsed;
+
+  g_static_mutex_unlock (&priv->progress_mutex);
+  /* leave critical section */
 }
 
 /**

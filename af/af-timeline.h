@@ -77,6 +77,8 @@ void                  af_timeline_advance            (AfTimeline             *ti
 		                                      gdouble                 new_progress);
 
 gdouble               af_timeline_get_progress       (AfTimeline              *timeline);
+void                  af_timeline_set_progress       (AfTimeline              *timeline,
+		                                      gdouble                  progress);
 
 gboolean              af_timeline_is_running         (AfTimeline              *timeline);
 
