@@ -26,6 +26,8 @@
 
 G_BEGIN_DECLS
 
+typedef struct AfTransition AfTransition;
+
 typedef void (*AfTypeTransformationFunc) (const GValue *from,
                                           const GValue *to,
                                           gdouble       progress,
@@ -40,33 +42,35 @@ void  af_animator_register_type_transformation (GType                    type,
 
 guint    af_animator_add                         (void);
 
-gboolean af_animator_add_transition_valist       (guint                   anim_id,
-                                                  gdouble                 from,
-                                                  gdouble                 to,
-                                                  AfTimelineProgressType  type,
-                                                  GObject                *object,
-                                                  va_list                 var_args);
-gboolean af_animator_add_child_transition_valist (guint                   anim_id,
-                                                  gdouble                 from,
-                                                  gdouble                 to,
-                                                  AfTimelineProgressType  type,
-                                                  GtkContainer           *container,
-                                                  GtkWidget              *child,
-                                                  va_list                 var_args);
+AfTransition* af_animator_add_transition_valist       (guint                   anim_id,
+                                                       gdouble                 from,
+                                                       gdouble                 to,
+                                                       AfTimelineProgressType  type,
+                                                       GObject                *object,
+                                                       va_list                 var_args);
+AfTransition* af_animator_add_child_transition_valist (guint                   anim_id,
+                                                       gdouble                 from,
+                                                       gdouble                 to,
+                                                       AfTimelineProgressType  type,
+                                                       GtkContainer           *container,
+                                                       GtkWidget              *child,
+                                                       va_list                 var_args);
 
-gboolean af_animator_add_transition              (guint                   anim_id,
+AfTransition* af_animator_add_transition         (guint                   anim_id,
                                                   gdouble                 from,
                                                   gdouble                 to,
                                                   AfTimelineProgressType  type,
                                                   GObject                *object,
                                                   ...);
-gboolean af_animator_add_child_transition        (guint                   anim_id,
+AfTransition* af_animator_add_child_transition   (guint                   anim_id,
                                                   gdouble                 from,
                                                   gdouble                 to,
                                                   AfTimelineProgressType  type,
                                                   GtkContainer           *container,
                                                   GtkWidget              *child,
                                                   ...);
+gboolean      af_animator_remove_transition      (guint         id,
+		                                  AfTransition *transition);
 
 gboolean af_animator_start                       (guint         id,
                                                   guint         duration);
@@ -79,8 +83,10 @@ gboolean af_animator_set_finished_notify         (guint                     anim
 		                                  AfFinishedAnimationNotify finished_notify);
 
 void     af_animator_remove                      (guint         id);
-void     af_animator_pause                       (guint         id);
+gdouble  af_animator_pause                       (guint         id);
 void     af_animator_resume                      (guint         id);
+void     af_animator_resume_with_progress        (guint         id,
+		                                  gdouble       progress);
 void     af_animator_reverse                     (guint         id);
 void     af_animator_advance                     (guint         id,
 		                                  gdouble       progress);

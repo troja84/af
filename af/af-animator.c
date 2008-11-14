@@ -29,7 +29,6 @@ static GHashTable *transformable_types = NULL;
 static guint id_count = 0;
 
 typedef struct AfPropertyRange AfPropertyRange;
-typedef struct AfTransition AfTransition;
 typedef struct AfAnimator AfAnimator;
 
 struct AfPropertyRange
@@ -492,7 +491,7 @@ af_animator_set_finished_notify (guint anim_id,
   return TRUE;
 }
 
-gboolean
+AfTransition*
 af_animator_add_transition_valist (guint                   anim_id,
                                    gdouble                 from,
                                    gdouble                 to,
@@ -520,10 +519,10 @@ af_animator_add_transition_valist (guint                   anim_id,
 
   g_ptr_array_add (animator->transitions, transition);
 
-  return TRUE;
+  return transition;
 }
 
-gboolean
+AfTransition*
 af_animator_add_transition (guint                   anim_id,
                             gdouble                 from,
                             gdouble                 to,
@@ -531,7 +530,7 @@ af_animator_add_transition (guint                   anim_id,
                             GObject                *object,
                             ...)
 {
-  gboolean result;
+  AfTransition *result;
   va_list args;
 
   va_start (args, object);
@@ -545,7 +544,7 @@ af_animator_add_transition (guint                   anim_id,
   return result;
 }
 
-gboolean
+AfTransition*
 af_animator_add_child_transition_valist (guint                    anim_id,
                                          gdouble                  from,
                                          gdouble                  to,
@@ -578,10 +577,10 @@ af_animator_add_child_transition_valist (guint                    anim_id,
 
   g_ptr_array_add (animator->transitions, transition);
 
-  return TRUE;
+  return transition;
 }
 
-gboolean
+AfTransition*
 af_animator_add_child_transition (guint                   anim_id,
                                   gdouble                 from,
                                   gdouble                 to,
@@ -590,7 +589,7 @@ af_animator_add_child_transition (guint                   anim_id,
                                   GtkWidget              *child,
                                   ...)
 {
-  gboolean result;
+  AfTransition *result;
   va_list args;
 
   va_start (args, child);
@@ -601,6 +600,25 @@ af_animator_add_child_transition (guint                   anim_id,
   va_end (args);
 
   return result;
+}
+
+gboolean
+af_animator_remove_transition (guint         id,
+		               AfTransition *transition)
+{
+  AfAnimator *animator;
+
+  g_return_val_if_fail (animators != NULL, FALSE);
+  g_return_val_if_fail (transition != NULL, FALSE);
+
+  animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (id));
+
+  g_return_val_if_fail (animator != NULL, FALSE);
+
+  if (g_ptr_array_remove (animator->transitions, transition) == FALSE)
+    return g_ptr_array_remove (animator->finished_transitions, transition);
+
+  return TRUE;
 }
 
 gboolean
@@ -629,18 +647,20 @@ af_animator_start (guint id,
   return TRUE;
 }
 
-void
+gdouble
 af_animator_pause (guint id)
 {
   AfAnimator *animator;
 
-  g_return_if_fail (animators != NULL);
+  g_return_val_if_fail (animators != NULL, -1);
 
   animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (id));
 
-  g_return_if_fail (animator != NULL);
+  g_return_val_if_fail (animator != NULL, -1);
 
   af_timeline_pause (animator->timeline);
+
+  return af_timeline_get_progress(animator->timeline);
 }
 
 void
@@ -653,6 +673,25 @@ af_animator_resume (guint id)
   animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (id));
 
   g_return_if_fail (animator != NULL);
+
+  af_timeline_start (animator->timeline);
+}
+
+void
+af_animator_resume_with_progress (guint   id,
+		                  gdouble progress)
+{
+  AfAnimator *animator;
+
+  g_return_if_fail (progress >= 0 && progress <= 1);
+
+  g_return_if_fail (animators != NULL);
+
+  animator = g_hash_table_lookup (animators, GUINT_TO_POINTER (id));
+
+  g_return_if_fail (animator != NULL);
+
+  af_timeline_set_progress (animator->timeline, progress);
 
   af_timeline_start (animator->timeline);
 }
