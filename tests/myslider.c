@@ -70,9 +70,9 @@ my_slider_class_init (MySliderClass *class)
   g_object_class_install_property (object_class,
 				   PROP_PIC_POSITION,
 				   g_param_spec_double ("pic",
-					                "PIC_COUNT",
-						        "The amount of pictures held by the widget",
-						        -G_MAXDOUBLE,
+					                "PIC_POSITION",
+						        "The current position in the line of pictures.",
+						        0,
 						        G_MAXDOUBLE,
 						        0,
 						        G_PARAM_READWRITE));

@@ -9,6 +9,7 @@ LDADDS = \
 	-lgthread-2.0
 
 noinst_PROGRAMS = \
+	test-adv-pic-slider\
 	test-pic-slider\
 	test-graph\
 	test-timeline-marker \
@@ -56,9 +57,20 @@ test_graph_LDADD = $(LDADDS)
 test_pic_slider_SOURCES = \
 	myslider.c \
 	myslider.h \
+	picture_loader.h \
+	picture_loader.c \
 	test-pic-slider.c
 
 test_pic_slider_LDADD = $(LDADDS)
+
+test_adv_pic_slider_SOURCES = \
+	myadvancedslider.c \
+	myadvancedslider.h \
+	picture_loader.h \
+	picture_loader.c \
+	test-adv-pic-slider.c
+
+test_adv_pic_slider_LDADD = $(LDADDS)
 
 test_chained_transitions_SOURCES = \
 	test-chained-transitions.c

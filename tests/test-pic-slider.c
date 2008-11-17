@@ -1,6 +1,8 @@
 #include <gtk/gtk.h>
 #include <af/af-animator.h>
+
 #include "myslider.h"
+#include "picture_loader.h"
 
 #define DURATION 2500
 #define PROG_LIMIT 0.35
@@ -14,88 +16,6 @@ static GThreadPool *load_pictures;
 
 static gint number = 0;
 static gboolean forward = TRUE;
-
-static void error_handling (GError *err)
-{
-  if (err == NULL)
-    return;
-
-  switch (err->code)
-    {
-      case G_IO_ERROR_NOT_FOUND:
-	g_error ("IO error occured!\n");
-        break;
-      case G_FILE_ERROR_NOTDIR:
-	g_error ("The given path doesn't direct to a directory!\n");
-	break;
-      default:
-	g_error ("Unknown error occured!\n");
-    }
-
-  g_free (err);
-}
-
-static void load_pics (gpointer data, 
-		       gpointer user_data)
-{
-  MySlider *slider;
-  GFileEnumerator *iter;
-  GFileInfo *file_info;
-  GFile *path, *file;
-  GdkPixbuf *handle;
-  GError *err;
-  gchar *filepath;
-
-  slider = MY_SLIDER (user_data);
-  path = (GFile*)data;
-
-  g_assert (path != NULL);
-
-  handle = NULL;
-  err = NULL;
-
-  iter = g_file_enumerate_children (path, "standard::name, standard::type", 
-		                    G_FILE_QUERY_INFO_NONE,
-				    NULL,
-				    &err);
-
-  error_handling (err);
-
-  file_info = g_file_enumerator_next_file (iter, NULL, &err);
-
-  error_handling (err);
-
-  while (file_info)
-    {
-      file = g_file_get_child (path, g_file_info_get_name (file_info));
-
-      filepath = g_file_get_path (file);
-
-      /*
-      printf ("FILE: %s - PATH: %s\n", 
-	      g_file_info_get_name (file_info), filepath);
-      */
-
-      handle = gdk_pixbuf_new_from_file (filepath, &err);
-
-      g_free (filepath);
-      g_object_unref (file);
-      
-      error_handling (err);
-
-      if (handle)
-        {
-          my_slider_add_picture (slider, handle);
-	  g_object_unref (handle);
-	}
-
-      handle = NULL;
-
-      file_info = g_file_enumerator_next_file (iter, NULL, &err);
-
-      error_handling (err);
-    }
-}
 
 static void
 finished_cb (guint    anim_id,
