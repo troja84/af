@@ -9,6 +9,7 @@ LDADDS = \
 	-lgthread-2.0
 
 noinst_PROGRAMS = \
+	test-widget-slider \
 	test-adv-pic-slider\
 	test-pic-slider\
 	test-graph\
@@ -71,6 +72,13 @@ test_adv_pic_slider_SOURCES = \
 	test-adv-pic-slider.c
 
 test_adv_pic_slider_LDADD = $(LDADDS)
+
+test_widget_slider_SOURCES = \
+	mywidgetslider.c \
+	mywidgetslider.h \
+	test-widget-slider.c
+
+test_widget_slider_LDADD = $(LDADDS)
 
 test_chained_transitions_SOURCES = \
 	test-chained-transitions.c
