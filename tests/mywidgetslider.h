@@ -16,31 +16,20 @@ typedef struct _MySliderClass MySliderClass;
 
 struct _MySlider
 {
-  GtkContainer parent_instance;
+  GtkBox parent_instance;
 };
 
 struct _MySliderClass
 {
-  GtkContainerClass parent_class;
+  GtkBoxClass parent_class;
 };
 
 GType my_slider_get_type (void);
 
 GtkWidget *my_slider_new (void);
 
-void my_slider_add_widget (MySlider *slider,
-		           GtkWidget   *widget);
-
-guint my_slider_widget_count (MySlider *slider);
-
 /*
  * Method definitions.
  */
-void
-my_slider_trans (const GValue *from,
-	         const GValue *to,
-	         gdouble       progress,
-		 gpointer      user_data,
-		 GValue       *out_value);
 
 #endif /* __MY_SLIDER_H__ */
