@@ -23,8 +23,10 @@ struct MySliderPriv
 {
   guint widget_index;
 
+  /* Animation */
   AfTimeline *timeline;
   gdouble position, old_position;
+  gint clear_widget;
 
   guint          default_expand : 1;
   guint          spacing_set    : 1;
@@ -60,6 +62,9 @@ static void my_slider_size_request     (GtkWidget      *widget,
 static void my_slider_size_allocate    (GtkWidget      *widget,
 		                        GtkAllocation  *allocation);
 
+void static my_slider_remove           (GtkContainer *container,
+		                        GtkWidget    *widget);
+
 static void my_slider_animation_frame_cb    (AfTimeline *timeline,
 		                             gdouble     progress,
 		                             gpointer    user_data);
@@ -74,6 +79,7 @@ my_slider_class_init (MySliderClass *class)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (class);
   GtkWidgetClass *widget_class;
+  GtkContainerClass *container_class;
 
   object_class->set_property = my_slider_set_property;
   object_class->get_property = my_slider_get_property;
@@ -82,6 +88,10 @@ my_slider_class_init (MySliderClass *class)
 
   widget_class->size_request = my_slider_size_request;
   widget_class->size_allocate = my_slider_size_allocate;
+
+  container_class = GTK_CONTAINER_CLASS (class);
+
+  container_class->remove = my_slider_remove;
 
   g_object_class_install_property (object_class,
 				   PROP_WIDGET_INDEX,
@@ -100,14 +110,27 @@ my_slider_class_init (MySliderClass *class)
 static void
 my_slider_init (MySlider *slider)
 {
+  MySliderPriv *priv;
+
+  priv = MY_SLIDER_GET_PRIV (slider);
+
+  priv->widget_index = 0;
+
+  priv->timeline = NULL;
+  priv->position = priv->old_position = 0;
+  priv->clear_widget = -1;
 }
 
 static void
 my_slider_handle_animation (MySlider *slider)
 {
+  GtkBox *box;
   MySliderPriv *priv;
 
-  if (GTK_WIDGET_DRAWABLE (GTK_WIDGET (slider)) == FALSE)
+  box = GTK_BOX (slider);
+
+  if (!GTK_WIDGET_DRAWABLE (GTK_WIDGET (slider)) ||
+      g_list_length (box->children) == 0)
     return;
       
   priv = MY_SLIDER_GET_PRIV (slider);
@@ -268,13 +291,13 @@ my_slider_size_allocate (GtkWidget      *widget,
       else
 	all.height = height;
 
-      if (x == vis_l)
+      if (x == vis_l && x != priv->clear_widget - 1)
         {
           all.x = progress * (gdouble)allocation->width + h_width - (gdouble)all.width / 2.0;
 
 	  visible = TRUE;
 	}
-      else if (x == vis_r)
+      else if (x == vis_r && x != priv->clear_widget + 1)
         {
           all.x = progress * (gdouble)allocation->width - h_width - (gdouble)all.width / 2.0;
 
@@ -305,6 +328,69 @@ GtkWidget *
 my_slider_new (void)
 {
   return g_object_new (MY_TYPE_SLIDER, NULL);
+}
+
+void static
+my_slider_remove (GtkContainer *container,
+		  GtkWidget    *widget)
+{
+  GtkBox *box;
+  GtkBoxChild *child;
+  GList *children;
+  MySlider *slider;
+  MySliderPriv *priv;
+  guint x;
+
+  box = GTK_BOX (container);
+  slider = MY_SLIDER (box);
+  priv = MY_SLIDER_GET_PRIV (slider);
+
+  x = 0;
+
+  children = box->children;
+  while (children)
+    {
+      child = children->data;
+
+      if (child->widget == widget)
+        {
+          if (priv->timeline)
+	    af_timeline_pause (priv->timeline);
+
+	  gtk_widget_unparent (widget);
+
+	  box->children = g_list_remove_link (box->children, children);
+	  g_list_free (children);
+	  g_free (child);
+
+	  // the widget was visible, so we have to resize
+	  if (x == priv->widget_index)
+	    {
+	      if (x < g_list_length (box->children))
+	        {
+	          priv->clear_widget = x;
+	          priv->old_position = priv->position - 1;
+		}
+	      else
+	        {
+		  priv->widget_index--;
+		  priv->clear_widget = x - 1;
+	          priv->old_position = priv->position + 1;
+		}
+
+	      // start a new animation
+	      if (priv->timeline)
+	        g_object_unref (priv->timeline);
+
+	      my_slider_handle_animation (slider);
+	    }
+	  else if (priv->timeline)
+	    af_timeline_start (priv->timeline);
+	}
+
+      children = children->next;
+      x++;
+    }
 }
 
 /* Animation stuff */
@@ -350,4 +436,6 @@ my_slider_animation_finished_cb (AfTimeline *timeline,
   g_object_unref (priv->timeline);
 
   priv->timeline = NULL;
+
+  priv->clear_widget = -1;
 }

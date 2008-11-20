@@ -15,6 +15,19 @@ clear_cb (GtkButton *button,
 }
 
 static gboolean
+remove_cb (GtkButton *button,
+	   gpointer   user_data)
+{
+  GtkContainer *container;
+
+  container = GTK_CONTAINER (my_slider);
+
+  gtk_container_remove (container, GTK_WIDGET (button));
+
+  return FALSE;
+}
+
+static gboolean
 to_pos_cb (GtkButton *button,
 	   gpointer   user_data)
 {
@@ -128,6 +141,12 @@ int main( int   argc,
   gtk_box_pack_start (GTK_BOX (my_slider),
 		      hbox, TRUE, TRUE, 0);
 
+  button = gtk_button_new_from_stock (GTK_STOCK_DELETE); 
+  gtk_box_pack_start (GTK_BOX (my_slider), 
+		      button, FALSE, FALSE, 0);
+  g_signal_connect (button, "clicked",
+                    G_CALLBACK (remove_cb), NULL);
+
   button = gtk_button_new_from_stock (GTK_STOCK_MEDIA_NEXT); 
   gtk_box_pack_start (GTK_BOX (my_slider), 
 		      button, FALSE, FALSE, 0);
@@ -138,6 +157,13 @@ int main( int   argc,
   button = gtk_image_new_from_file ("graf_zahl.jpg");
   gtk_box_pack_start (GTK_BOX (my_slider), 
 		      button, FALSE, FALSE, 0);
+
+  button = gtk_button_new_from_stock (GTK_STOCK_DELETE); 
+  gtk_box_pack_start (GTK_BOX (my_slider), 
+		      button, FALSE, FALSE, 0);
+  g_signal_connect (button, "clicked",
+                    G_CALLBACK (remove_cb), NULL);
+
   /* END */
 
   bbox = gtk_hbutton_box_new ();
