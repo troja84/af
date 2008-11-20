@@ -181,7 +181,9 @@ my_slider_set_property (GObject      *object,
 	if (index < 0 || index >= length)
 	  return;
 
-	priv->old_position = (gdouble)priv->widget_index;
+	if (!priv->timeline)
+	  priv->old_position = (gdouble)priv->widget_index;
+	
 	priv->widget_index = index;
 
 	my_slider_handle_animation (slider);
@@ -268,8 +270,8 @@ my_slider_size_allocate (GtkWidget      *widget,
 
   progress = priv->position - (gint)priv->position;
 
-  vis_l = (gint) floor (priv->position);
-  vis_r = (gint) ceil (priv->position);
+  vis_r = (gint) floor (priv->position);
+  vis_l = (gint) ceil (priv->position);
 
    x = 0;
 
@@ -291,17 +293,27 @@ my_slider_size_allocate (GtkWidget      *widget,
       else
 	all.height = height;
 
-      if (x == vis_l && x != priv->clear_widget - 1)
+      if (x == vis_r)
         {
-          all.x = progress * (gdouble)allocation->width + h_width - (gdouble)all.width / 2.0;
+	  if (priv->clear_widget != -1 && priv->clear_widget > x && priv->widget_index > priv->position)
+	      visible = FALSE;
+	  else
+	    {
+	      all.x = progress * (gdouble)allocation->width + h_width - (gdouble)all.width / 2.0;
 
-	  visible = TRUE;
+	      visible = TRUE;
+	    }
 	}
-      else if (x == vis_r && x != priv->clear_widget + 1)
+      else if (x == vis_l)
         {
-          all.x = progress * (gdouble)allocation->width - h_width - (gdouble)all.width / 2.0;
+	  if (priv->clear_widget != -1 && priv->clear_widget < x && priv->widget_index < priv->position)
+	      visible = FALSE;
+	  else
+	    {
+              all.x = progress * (gdouble)allocation->width - h_width - (gdouble)all.width / 2.0;
 
-	  visible = TRUE;
+	      visible = TRUE;
+	    }
 	}
       else
         visible = FALSE;
