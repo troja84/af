@@ -9,6 +9,7 @@ LDADDS = \
 	-lgthread-2.0
 
 noinst_PROGRAMS = \
+	test-vbox-animated \
 	test-widget-slider \
 	test-adv-pic-slider\
 	test-pic-slider\
@@ -79,6 +80,13 @@ test_widget_slider_SOURCES = \
 	test-widget-slider.c
 
 test_widget_slider_LDADD = $(LDADDS)
+
+test_vbox_animated_SOURCES = \
+	myvbox_a.c \
+	myvbox_a.h \
+	test-vbox-animated.c
+
+test_vbox_animated_LDADD = $(LDADDS)
 
 test_chained_transitions_SOURCES = \
 	test-chained-transitions.c
