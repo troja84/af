@@ -13,8 +13,9 @@ G_BEGIN_DECLS
 #define MY_VBOX_GET_CLASS(obj)   (G_TYPE_INSTANCE_GET_CLASS ((obj), MY_TYPE_VBOX, MyVBoxClass))
 
 
-typedef struct _MyVBox	      MyVBox;
+typedef struct _MyVBox	     MyVBox;
 typedef struct _MyVBoxClass  MyVBoxClass;
+typedef enum   MyVBoxAnimationStyle MyVBoxAnimationStyle;
 
 struct _MyVBox
 {
@@ -26,17 +27,28 @@ struct _MyVBoxClass
   GtkBoxClass parent_class;
 };
 
+enum MyVBoxAnimationStyle
+{
+  MY_VBOX_ANIMATION_STYLE_MOVE,
+  MY_VBOX_ANIMATION_STYLE_RESIZE
+};
 
 GType       my_vbox_get_type (void) G_GNUC_CONST;
 
 GtkWidget * my_vbox_new          (gboolean homogeneous,
                                   gint     spacing);
+
 void        my_vbox_pack_start_n (GtkBox    *box,
 		                  GtkWidget *child,
 				  gboolean   expand,
 				  gboolean   fill,
 				  guint      padding,
 				  gint       position);
+
+MyVBoxAnimationStyle my_vbox_get_animation_style (MyVBox               *vbox);
+void                 my_vbox_set_animation_style (MyVBox               *vbox,
+		                                  MyVBoxAnimationStyle  style);
+
 
 G_END_DECLS
 

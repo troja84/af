@@ -26,6 +26,7 @@ struct MyVBoxPriv
   gdouble progress;
 
   GHashTable *animation_widgets;
+  MyVBoxAnimationStyle animation_style;
 
   GList *children_pack_start;
   GList *children_pack_end;
@@ -77,6 +78,8 @@ my_vbox_init (MyVBox *vbox)
 		                              g_direct_equal);
 
   priv->children_pack_start = priv->children_pack_end = NULL;
+
+  priv->animation_style = MY_VBOX_ANIMATION_STYLE_MOVE;
 }
 
 static void
@@ -472,6 +475,26 @@ my_vbox_pack_start_n (GtkBox    *box,
   my_vbox_handle_animation (vbox);
 }
 
+MyVBoxAnimationStyle
+my_vbox_get_animation_style (MyVBox *vbox)
+{
+  MyVBoxPriv *priv;
+
+  priv = MY_VBOX_GET_PRIV (vbox);
+
+  return priv->animation_style;
+}
+
+void
+my_vbox_set_animation_style (MyVBox *vbox,
+		             MyVBoxAnimationStyle style)
+{
+  MyVBoxPriv *priv;
+
+  priv = MY_VBOX_GET_PRIV (vbox);
+
+  priv->animation_style = style;
+}
 
 /* ANIMATION */
 static void
@@ -542,30 +565,48 @@ my_vbox_animation_frame_cb (AfTimeline *timeline,
 
       if (type)
         {
-	  y = 0;
-
           allocation.x = alloc->allocation.x;
           allocation.width = alloc->allocation.width;
 
-	  if (GPOINTER_TO_INT (type) == MY_VBOX_ANIMATION_REMOVE)
+	  if (priv->animation_style == MY_VBOX_ANIMATION_STYLE_MOVE)
 	    {
-	      if (children->next != NULL)
-                y = alloc->allocation.y - progress * alloc->allocation.height;
-	      else
-                y = alloc->allocation.y + progress * alloc->allocation.height;
+	      y = 0;
+
+	      if (GPOINTER_TO_INT (type) == MY_VBOX_ANIMATION_REMOVE)
+	        {
+	          if (children->next != NULL)
+                    y = alloc->allocation.y - progress * alloc->allocation.height;
+	          else
+                    y = alloc->allocation.y + progress * alloc->allocation.height;
+		}
+	      else if (GPOINTER_TO_INT (type) == MY_VBOX_ANIMATION_ADD)
+	        {
+	          if (children->next != NULL)
+                    y = alloc->allocation.y - (1 - progress) * alloc->allocation.height;
+	          else
+                    y = alloc->allocation.y + (1 - progress) * alloc->allocation.height;
+		}
+
+	      allocation.y = y;
+	      allocation.height = alloc->allocation.height;
+	      
+	      offset += ABS (y - alloc->allocation.y);
 	    }
-	  else if (GPOINTER_TO_INT (type) == MY_VBOX_ANIMATION_ADD)
+	  else if (priv->animation_style == MY_VBOX_ANIMATION_STYLE_RESIZE)
 	    {
-	      if (children->next != NULL)
-                y = alloc->allocation.y - (1 - progress) * alloc->allocation.height;
-	      else
-                y = alloc->allocation.y + (1 - progress) * alloc->allocation.height;
+	      if (GPOINTER_TO_INT (type) == MY_VBOX_ANIMATION_REMOVE)
+	        {
+                  allocation.height = (1 - progress) * alloc->allocation.height;
+	          allocation.y = alloc->allocation.y + alloc->allocation.height / 2 - allocation.height / 2;
+		}
+	      else if (GPOINTER_TO_INT (type) == MY_VBOX_ANIMATION_ADD)
+	        {
+                  allocation.height =  progress * alloc->allocation.height;
+	          allocation.y = alloc->allocation.y + alloc->allocation.height / 2 - allocation.height / 2;
+		}
+
+	      offset += allocation.height / 2;
 	    }
-
-	  offset += ABS (y - alloc->allocation.y);
-
-	  allocation.y = y;
-	  allocation.height = alloc->allocation.height;
 	  
           gtk_widget_size_allocate (alloc->widget, &allocation);
 	}
@@ -586,10 +627,17 @@ my_vbox_animation_frame_cb (AfTimeline *timeline,
 
       if (type)
         {
-	  if (GPOINTER_TO_INT (type) == MY_VBOX_ANIMATION_REMOVE)
-            y += alloc->allocation.height - progress * alloc->allocation.height;
-	  else if (GPOINTER_TO_INT (type) == MY_VBOX_ANIMATION_ADD)
-            y += alloc->allocation.height - (1 - progress) * alloc->allocation.height;
+	  if (priv->animation_style == MY_VBOX_ANIMATION_STYLE_MOVE)
+	    {
+	      if (GPOINTER_TO_INT (type) == MY_VBOX_ANIMATION_REMOVE)
+                y += alloc->allocation.height - progress * alloc->allocation.height;
+	      else if (GPOINTER_TO_INT (type) == MY_VBOX_ANIMATION_ADD)
+                y += alloc->allocation.height - (1 - progress) * alloc->allocation.height;
+	    }
+	  else if (priv->animation_style == MY_VBOX_ANIMATION_STYLE_RESIZE)
+	    {
+	      y += alloc->allocation.height;
+	    }
 	}
       else
         {
@@ -597,13 +645,18 @@ my_vbox_animation_frame_cb (AfTimeline *timeline,
 	  allocation.x = alloc->allocation.x;
           allocation.y = y;
 
-	  if (children->next == NULL)
+	  if (priv->animation_style == MY_VBOX_ANIMATION_STYLE_MOVE)
 	    {
-	      allocation.height = alloc->allocation.height + offset;
+	      if (children->next == NULL)
+	        {
+	          allocation.height = alloc->allocation.height + offset;
+	        }
+	      else
+	        allocation.height = alloc->allocation.height + offset;
 	    }
-	  else
-	      allocation.height = alloc->allocation.height + offset;
-	      
+	  else if (priv->animation_style == MY_VBOX_ANIMATION_STYLE_RESIZE)
+	    allocation.height = alloc->allocation.height;
+
 	  gtk_widget_size_allocate (alloc->widget, &allocation);
 
 	  y = allocation.y + allocation.height;

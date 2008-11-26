@@ -152,10 +152,30 @@ button_cb (GtkCheckButton *button,
   return FALSE;
 }
 
+static gboolean
+select_animation_cb (GtkRadioButton *button,
+		     gpointer user_data)
+{
+  const gchar *mode = (const gchar *)user_data;
+
+  if (!gtk_toggle_button_get_active (button))
+    return FALSE;
+
+  if (g_strcmp0 ("move", mode) == 0)
+    my_vbox_set_animation_style (MY_VBOX (my_vbox),
+		                 MY_VBOX_ANIMATION_STYLE_MOVE);
+  else if (g_strcmp0 ("resize", mode) == 0)
+    my_vbox_set_animation_style (MY_VBOX (my_vbox),
+		                 MY_VBOX_ANIMATION_STYLE_RESIZE);
+
+  return FALSE;
+}
+
 int main( int   argc,
           char *argv[] )
 {
-  GtkWidget *window, *hbox, *vbox, *cbbox, *checkbox, *text_view, *button;
+  GtkWidget *window, *hbox, *vbox, *bbox, *checkbox, *text_view, *button; 
+  GtkWidget *radio1, *radio2, *rbbox, *frame;
     
   gtk_init (&argc, &argv);
 
@@ -209,24 +229,42 @@ int main( int   argc,
   gtk_widget_show_all (widget3);
 
   /* Add checkboxes to the vbox */
-  cbbox = gtk_vbutton_box_new ();
+  bbox = gtk_vbutton_box_new ();
   checkbox = gtk_check_button_new_with_label ("Save");
   g_signal_connect (checkbox, "toggled",
 		    G_CALLBACK (button_cb), GINT_TO_POINTER (1));
-  gtk_container_add (GTK_CONTAINER (cbbox),
+  gtk_container_add (GTK_CONTAINER (bbox),
 		     checkbox);
   checkbox = gtk_check_button_new_with_label ("Text");
   g_signal_connect (checkbox, "toggled",
 		    G_CALLBACK (button_cb), GINT_TO_POINTER (2));
-  gtk_container_add (GTK_CONTAINER (cbbox),
+  gtk_container_add (GTK_CONTAINER (bbox),
 		     checkbox);
   checkbox = gtk_check_button_new_with_label ("Edit");
   g_signal_connect (checkbox, "toggled",
 		    G_CALLBACK (button_cb), GINT_TO_POINTER (4));
-  gtk_container_add (GTK_CONTAINER (cbbox),
+  gtk_container_add (GTK_CONTAINER (bbox),
 		     checkbox);
 
-  gtk_container_add (GTK_CONTAINER (vbox), cbbox);
+  /* Add radio buttons to select the animation style */
+  frame = gtk_frame_new ("Animation mode");
+  rbbox = gtk_hbutton_box_new ();
+  radio1 = gtk_radio_button_new_with_label (NULL, "Move");
+  g_signal_connect (radio1, "toggled",
+		    G_CALLBACK (select_animation_cb), "move");
+  gtk_container_add (GTK_CONTAINER (rbbox),
+		     radio1);
+  radio2 = gtk_radio_button_new_with_label_from_widget (GTK_RADIO_BUTTON (radio1), "Resize");
+  g_signal_connect (radio2, "toggled",
+		    G_CALLBACK (select_animation_cb), "resize");
+  gtk_container_add (GTK_CONTAINER (rbbox),
+		     radio2);
+  
+  gtk_container_add (GTK_CONTAINER (frame), rbbox);
+
+  gtk_container_add (GTK_CONTAINER (bbox), frame);
+
+  gtk_container_add (GTK_CONTAINER (vbox), bbox);
 
   /* Add vbox to the hbox */
   gtk_container_add (GTK_CONTAINER (hbox), vbox);
