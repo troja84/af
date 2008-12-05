@@ -29,7 +29,7 @@ select_animation_cb (GtkRadioButton *button,
 int main( int   argc,
           char *argv[] )
 {
-  GtkWidget *window, *box, *hbox_i, *frame, *bbox, *radio, *widget; 
+  GtkWidget *window, *box, *hbox_i, *frame, *bbox, *radio, *widget;
     
   gtk_init (&argc, &argv);
 
@@ -43,7 +43,7 @@ int main( int   argc,
   g_signal_connect (G_OBJECT (window), "delete_event",
     		    G_CALLBACK (gtk_main_quit), NULL);
 
-  box = my_vbox_new (FALSE, 0);
+  box = gtk_vbox_new (FALSE, 0);
 	hbox_i = gtk_hbox_new (FALSE, FALSE);
   frame = gtk_frame_new ("Let's count together");
   my_expander = my_expander_new ("Test of the function...");
@@ -54,7 +54,6 @@ int main( int   argc,
   gtk_container_add (GTK_CONTAINER (bbox), widget);
   gtk_container_add (GTK_CONTAINER (box), bbox);
 
-	/*
   bbox = gtk_vbutton_box_new ();
 
   radio = gtk_radio_button_new_with_label (NULL, "Count even numbers");
@@ -69,31 +68,30 @@ int main( int   argc,
   gtk_container_add (GTK_CONTAINER (bbox), widget);
   widget = gtk_button_new_from_stock (GTK_STOCK_OK);
   gtk_container_add (GTK_CONTAINER (bbox), widget);
-	*/
 
   /* button box into the frame */
-  //gtk_container_add (GTK_CONTAINER (frame), bbox);
+  gtk_container_add (GTK_CONTAINER (frame), bbox);
 
   /* picture into the vbox */
-	/*
   gtk_container_add (GTK_CONTAINER (hbox_i), 
 										 gtk_image_new_from_file ("./graf_zahl.jpg"));
-	*/
 
 	/* frame into the vbox */
-  //gtk_container_add (GTK_CONTAINER (hbox_i), frame);
+  gtk_container_add (GTK_CONTAINER (hbox_i), frame);
 
-	/* vbox into expander */
-  //gtk_container_add (GTK_CONTAINER (my_expander), hbox_i);
+	/* box into expander */
+  gtk_container_add (GTK_CONTAINER (my_expander), hbox_i);
 
+	/*
   gtk_container_add (GTK_CONTAINER (my_expander), 
 										 gtk_image_new_from_file ("./graf_zahl.jpg"));
+	*/
 
   gtk_container_add (GTK_CONTAINER (box), my_expander);
 
   gtk_container_add (GTK_CONTAINER (window), box);
 
-  gtk_widget_show_all (window);
+	gtk_widget_show_all (window);
 
   gtk_main ();
     
