@@ -158,7 +158,7 @@ select_animation_cb (GtkRadioButton *button,
 {
   const gchar *mode = (const gchar *)user_data;
 
-  if (!gtk_toggle_button_get_active (button))
+  if (!gtk_toggle_button_get_active (GTK_TOGGLE_BUTTON (button)))
     return FALSE;
 
   if (g_strcmp0 ("move", mode) == 0)

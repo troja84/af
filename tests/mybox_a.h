@@ -69,10 +69,9 @@ MyBoxAnimationStyle my_box_get_animation_style (MyBox               *box);
 void                my_box_set_animation_style (MyBox               *box,
 		                                MyBoxAnimationStyle  style);
 
-MyBoxAnimationStyle my_box_get_animation_style (MyBox               *vbox);
-void                my_box_set_animation_style (MyBox               *vbox,
-		                                MyBoxAnimationStyle  style);
-
+MyBoxAnimationStyle my_box_get_animation_style (MyBox               *box);
+void                my_box_set_orientation     (MyBox *box,
+						GtkOrientation orientation);
 
 G_END_DECLS
 
